@@ -58,7 +58,7 @@
       "id": "S2-06",
       "ts_utc": "2026-10-05T14:27:40Z",
       "host": "web01",
-      "event_type": "web_request",
+      "event_type": "web_scan",
       "match": {
         "src_ip": "203.0.113.77"
       },
