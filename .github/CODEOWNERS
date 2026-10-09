@@ -1,0 +1,27 @@
+# [A] Evidence & Parsing
+/src/forensic/models.py @personA
+/src/forensic/schema.sql @personA
+/src/forensic/db.py @personA
+/src/forensic/ingest.py @personA
+/src/forensic/parsers/ @personA
+/src/forensic/normalize.py @personA
+/src/forensic/skew.py @personA
+/src/forensic/build.py @personA
+/tests/fixtures/ @personA
+/tests/test_ingest.py @personA
+/tests/test_parsers.py @personA
+/tests/test_normalize.py @personA
+/tests/test_skew.py @personA
+/src/forensic/cli_evidence.py @personA
+
+# [B] Analysis & Viewer
+/src/forensic/timeline.py @personB
+/src/forensic/report.py @personB
+/src/forensic/templates/ @personB
+/viewer/ @personB
+/scenarios/ @personB
+/tests/test_ground_truth.py @personB
+/tests/test_timeline_report.py @personB
+/evaluation/ @personB
+/docs/ @personB
+/src/forensic/cli_analysis.py @personB

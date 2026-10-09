@@ -1,0 +1,2 @@
+[console_scripts]
+forensic = forensic.cli:app
