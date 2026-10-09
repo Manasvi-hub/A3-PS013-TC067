@@ -18,7 +18,7 @@ def get_conn(case_dir: Path):
 
 @app.command()
 def search(
-    case: Path,
+    case: Path = typer.Option(..., "--case", help="Case directory"),
     query: str = typer.Argument(None, help="FTS search query"),
     host: str = typer.Option(None, help="Filter by host"),
     ip: str = typer.Option(None, help="Filter by source IP"),
@@ -41,7 +41,7 @@ def search(
 
 @app.command()
 def report(
-    case: Path,
+    case: Path = typer.Option(..., "--case", help="Case directory"),
     out: Path = typer.Option(..., help="Output HTML path"),
     json_out: Path = typer.Option(None, "--json", help="Output JSON path"),
     csv: Path = typer.Option(None, "--csv", help="Output CSV path")
@@ -51,6 +51,6 @@ def report(
     typer.echo(f"Report generated at {out}")
 
 @app.command()
-def ui(case: Path):
+def ui(case: Path = typer.Option(..., "--case", help="Case directory")):
     typer.echo(f"Launching Streamlit viewer for {case}...")
     subprocess.run(["streamlit", "run", "viewer/app.py", "--", "--case", str(case)])
