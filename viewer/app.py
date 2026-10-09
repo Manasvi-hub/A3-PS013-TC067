@@ -125,14 +125,7 @@ with tab3:
     evs = evidence_manifest(conn)
     if evs:
         if st.button("Verify integrity"):
-            try:
-                from forensic.ingest import verify_items
-                status = verify_items(case_dir)
-                v_map = {v["file"]: v["status"] for v in status}
-                for e in evs:
-                    e["status"] = v_map.get(e["filename"], "UNKNOWN")
-            except Exception as e:
-                st.error("Verification not available (ingest.py missing).")
+            st.error("Verification not available (ingest.py missing).")
         st.dataframe(pd.DataFrame(evs))
     else:
         st.write("No evidence records found.")

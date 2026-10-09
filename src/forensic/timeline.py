@@ -3,6 +3,18 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 
+__all__ = [
+    "query_events", 
+    "context_window", 
+    "get_evidence", 
+    "summary_stats", 
+    "key_events", 
+    "gap_summary", 
+    "skew_summary", 
+    "evidence_manifest", 
+    "Filters"
+]
+
 @dataclass
 class Filters:
     hosts: Optional[List[str]] = None
@@ -16,7 +28,11 @@ class Filters:
     text: Optional[str] = None
     use_corrected: bool = True
 
-def query_events(conn: sqlite3.Connection, f: Filters, limit: int = 5000, offset: int = 0) -> List[dict]:
+def _dict_fetchall(cur):
+    cols = [d[0] for d in cur.description] if cur.description else []
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+def query_events(conn, f: Filters, limit: int = 5000, offset: int = 0) -> List[dict]:
     query = "SELECT events.* FROM events "
     params = []
     
@@ -68,11 +84,12 @@ def query_events(conn: sqlite3.Connection, f: Filters, limit: int = 5000, offset
     query += f" ORDER BY {ts_col} ASC, events.id ASC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     
-    rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
+    cur = conn.execute(query, params)
+    return _dict_fetchall(cur)
 
-def summary_stats(conn: sqlite3.Connection) -> dict:
-    events = conn.execute("SELECT host, event_type, severity, src_ip FROM events").fetchall()
+def summary_stats(conn) -> dict:
+    cur = conn.execute("SELECT host, event_type, severity, src_ip FROM events")
+    events = _dict_fetchall(cur)
     if not events:
         return {}
     
@@ -89,17 +106,17 @@ def summary_stats(conn: sqlite3.Connection) -> dict:
             
     top_ips = sorted(ips.items(), key=lambda x: x[1], reverse=True)[:5]
     
-    first = conn.execute("SELECT ts_utc_corrected FROM events ORDER BY ts_utc_corrected ASC LIMIT 1").fetchone()
-    last = conn.execute("SELECT ts_utc_corrected FROM events ORDER BY ts_utc_corrected DESC LIMIT 1").fetchone()
+    first = _dict_fetchall(conn.execute("SELECT ts_utc_corrected FROM events ORDER BY ts_utc_corrected ASC LIMIT 1"))
+    last = _dict_fetchall(conn.execute("SELECT ts_utc_corrected FROM events ORDER BY ts_utc_corrected DESC LIMIT 1"))
     
-    ev_files = conn.execute("SELECT COUNT(*) as c FROM evidence").fetchone()["c"]
-    gaps = conn.execute("SELECT COUNT(*) as c FROM parse_gaps").fetchone()["c"]
+    ev_files = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
+    gaps = conn.execute("SELECT COUNT(*) FROM parse_gaps").fetchone()[0]
     
     return {
         "total_events": len(events),
         "hosts": list(by_host.keys()),
-        "first_event": first["ts_utc_corrected"] if first else None,
-        "last_event": last["ts_utc_corrected"] if last else None,
+        "first_event": first[0]["ts_utc_corrected"] if first else None,
+        "last_event": last[0]["ts_utc_corrected"] if last else None,
         "by_type": by_type,
         "by_severity": by_sev,
         "by_host": by_host,
@@ -108,13 +125,13 @@ def summary_stats(conn: sqlite3.Connection) -> dict:
         "total_gaps": gaps
     }
 
-def gap_summary(conn: sqlite3.Connection) -> List[dict]:
+def gap_summary(conn) -> List[dict]:
     res = []
-    evs = conn.execute("SELECT id, filename, host, line_count FROM evidence").fetchall()
+    evs = _dict_fetchall(conn.execute("SELECT id, filename, host, line_count FROM evidence"))
     for ev in evs:
         eid = ev["id"]
-        parsed = conn.execute("SELECT COUNT(*) as c FROM events WHERE evidence_id = ?", (eid,)).fetchone()["c"]
-        gaps = conn.execute("SELECT reason, COUNT(*) as c FROM parse_gaps WHERE evidence_id = ? GROUP BY reason", (eid,)).fetchall()
+        parsed = conn.execute("SELECT COUNT(*) FROM events WHERE evidence_id = ?", (eid,)).fetchone()[0]
+        gaps = _dict_fetchall(conn.execute("SELECT reason, COUNT(*) as c FROM parse_gaps WHERE evidence_id = ? GROUP BY reason", (eid,)))
         
         reasons = {g["reason"]: g["c"] for g in gaps}
         blank_lines = reasons.get("empty_line", 0)
@@ -137,37 +154,46 @@ def gap_summary(conn: sqlite3.Connection) -> List[dict]:
         })
     return res
 
-def key_events(conn: sqlite3.Connection) -> List[dict]:
-    high_med = conn.execute("SELECT * FROM events WHERE severity IN ('high', 'medium')").fetchall()
+def key_events(conn) -> List[dict]:
+    high_med = _dict_fetchall(conn.execute("SELECT * FROM events WHERE severity IN ('high', 'medium')"))
     
     others = []
-    ips = conn.execute("SELECT DISTINCT src_ip FROM events WHERE src_ip IS NOT NULL").fetchall()
+    ips = _dict_fetchall(conn.execute("SELECT DISTINCT src_ip FROM events WHERE src_ip IS NOT NULL"))
     for ip_row in ips:
         ip = ip_row["src_ip"]
-        ssh = conn.execute("SELECT * FROM events WHERE src_ip = ? AND event_type = 'ssh_accepted_login' ORDER BY ts_utc_corrected ASC LIMIT 1", (ip,)).fetchone()
-        if ssh: others.append(ssh)
+        ssh = _dict_fetchall(conn.execute("SELECT * FROM events WHERE src_ip = ? AND event_type = 'ssh_accepted_login' ORDER BY ts_utc_corrected ASC LIMIT 1", (ip,)))
+        if ssh: others.append(ssh[0])
         
-        web = conn.execute("SELECT * FROM events WHERE src_ip = ? AND event_type LIKE 'web_%' AND event_type != 'web_request' ORDER BY ts_utc_corrected ASC LIMIT 1", (ip,)).fetchone()
-        if web: others.append(web)
+        web = _dict_fetchall(conn.execute("SELECT * FROM events WHERE src_ip = ? AND event_type LIKE 'web_%' AND event_type != 'web_request' ORDER BY ts_utc_corrected ASC LIMIT 1", (ip,)))
+        if web: others.append(web[0])
         
-    combined = {r["id"]: dict(r) for r in high_med + others}
+    combined = {r["id"]: r for r in high_med + others}
     return sorted(combined.values(), key=lambda x: x["ts_utc_corrected"])
 
-def skew_summary(conn: sqlite3.Connection) -> List[dict]:
+def skew_summary(conn) -> List[dict]:
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM skew_corrections").fetchall()]
+        return _dict_fetchall(conn.execute("SELECT * FROM skew_corrections"))
     except sqlite3.OperationalError:
         return []
 
-def evidence_manifest(conn: sqlite3.Connection) -> List[dict]:
-    return [dict(r) for r in conn.execute("SELECT * FROM evidence").fetchall()]
+def evidence_manifest(conn) -> list[dict]:
+    cur = conn.execute(
+        "SELECT id, filename, stored_path, sha256, size_bytes, line_count, "
+        "collected_at_utc, collector, host, source_type, declared_tz FROM evidence ORDER BY id")
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-def context_window(conn: sqlite3.Connection, event_id: int, seconds: int = 60) -> List[dict]:
-    row = conn.execute("SELECT ts_utc_corrected FROM events WHERE id = ?", (event_id,)).fetchone()
+def get_evidence(conn, evidence_id: int) -> dict:
+    cur = conn.execute("SELECT * FROM evidence WHERE id = ?", (evidence_id,))
+    rows = _dict_fetchall(cur)
+    return rows[0] if rows else {}
+
+def context_window(conn, event_id: int, seconds: int = 60) -> List[dict]:
+    row = _dict_fetchall(conn.execute("SELECT ts_utc_corrected FROM events WHERE id = ?", (event_id,)))
     if not row:
         return []
         
-    ts_str = row["ts_utc_corrected"].replace("Z", "+00:00")
+    ts_str = row[0]["ts_utc_corrected"].replace("Z", "+00:00")
     try:
         ts = datetime.fromisoformat(ts_str)
     except ValueError:
@@ -176,5 +202,5 @@ def context_window(conn: sqlite3.Connection, event_id: int, seconds: int = 60) -
     start = (ts - timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     end = (ts + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     
-    rows = conn.execute("SELECT * FROM events WHERE ts_utc_corrected >= ? AND ts_utc_corrected <= ? ORDER BY ts_utc_corrected ASC", (start, end)).fetchall()
-    return [dict(r) for r in rows]
+    cur = conn.execute("SELECT * FROM events WHERE ts_utc_corrected >= ? AND ts_utc_corrected <= ? ORDER BY ts_utc_corrected ASC", (start, end))
+    return _dict_fetchall(cur)
