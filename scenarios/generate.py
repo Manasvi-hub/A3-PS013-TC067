@@ -4,27 +4,26 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-random.seed(42)
-
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w') as f:
+    with open(path, 'w', newline='\n', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
+        f.write('\n')
 
-def write_syslog(path, host, tz_offset, clock_skew, entries, malformed=None):
+def write_syslog(path, host, tz_offset, clock_skew, entries, malformed=None, rng=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for dt, proc, msg in entries:
         local_dt = dt + timedelta(seconds=tz_offset + clock_skew)
-        ts = local_dt.strftime("%b %e %H:%M:%S").replace(" 0", "  ")
+        ts = f"{local_dt:%b} {local_dt.day:2d} {local_dt:%H:%M:%S}"
         lines.append(f"{ts} {host} {proc}: {msg}\n")
     if malformed:
         for m in malformed:
-            lines.insert(random.randint(0, len(lines)), m + "\n")
-    with open(path, 'w') as f:
+            lines.insert(rng.randint(0, len(lines)), m + "\n")
+    with open(path, 'w', newline='\n', encoding='utf-8') as f:
         f.writelines(lines)
 
-def write_nginx(path, clock_skew, tz_str, entries, malformed=None):
+def write_nginx(path, clock_skew, tz_str, entries, malformed=None, rng=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for dt, ip, method, req_path, status, ua in entries:
@@ -33,29 +32,28 @@ def write_nginx(path, clock_skew, tz_str, entries, malformed=None):
         lines.append(f"{ip} - - [{ts} {tz_str}] \"{method} {req_path} HTTP/1.1\" {status} 512 \"-\" \"{ua}\"\n")
     if malformed:
         for m in malformed:
-            lines.insert(random.randint(0, len(lines)), m + "\n")
-    with open(path, 'w') as f:
+            lines.insert(rng.randint(0, len(lines)), m + "\n")
+    with open(path, 'w', newline='\n', encoding='utf-8') as f:
         f.writelines(lines)
 
 def get_utc(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 def generate_s1():
+    rng = random.Random(1)
     base = Path("scenarios/s1_ssh_bruteforce")
     base.mkdir(parents=True, exist_ok=True)
     
     entries = []
     start_time = get_utc("2026-10-03T02:14:07Z")
     
-    # Noise
     for i in range(100):
-        dt = start_time - timedelta(minutes=random.randint(10, 60))
+        dt = start_time - timedelta(minutes=rng.randint(10, 60))
         entries.append((dt, "sshd[100]", "Accepted publickey for alice from 198.51.100.10 port 50000 ssh2"))
     
-    # Attack steps
     for i in range(150):
         dt = start_time + timedelta(seconds=i*2)
-        user = random.choice(["root", "admin", "test", "oracle"])
+        user = rng.choice(["root", "admin", "test", "oracle"])
         msg = f"Failed password for invalid user {user} from 203.0.113.50 port 51122 ssh2"
         entries.append((dt, "sshd[1234]", msg))
         
@@ -74,7 +72,7 @@ def generate_s1():
         "Just some random text not matching syslog"
     ]
     
-    write_syslog(base / "auth.log", "web01", 0, 0, entries, malformed)
+    write_syslog(base / "auth.log", "web01", 0, 0, entries, malformed, rng=rng)
     
     sources = {
         "case_id": "s1_ssh_bruteforce",
@@ -89,7 +87,11 @@ def generate_s1():
         "attacker_ips": ["203.0.113.50"],
         "steps": [
             {"id": "S1-01", "ts_utc": "2026-10-03T02:14:07Z", "host": "web01", "event_type": "ssh_failed_login", "match": {"src_ip": "203.0.113.50"}, "description": "First brute-force attempt"},
-            {"id": "S1-02", "ts_utc": "2026-10-03T02:19:51Z", "host": "web01", "event_type": "ssh_accepted_login", "match": {"src_ip": "203.0.113.50", "username": "deploy"}, "description": "First successful login (the answer to 'when did they get in?')"}
+            {"id": "S1-02", "ts_utc": "2026-10-03T02:19:51Z", "host": "web01", "event_type": "ssh_accepted_login", "match": {"src_ip": "203.0.113.50", "username": "deploy"}, "description": "First successful login (the answer to 'when did they get in?')"},
+            {"id": "S1-03", "ts_utc": "2026-10-03T02:20:30Z", "host": "web01", "event_type": "session_opened", "match": {"username": "deploy"}, "description": "Session opened for deploy"},
+            {"id": "S1-04", "ts_utc": "2026-10-03T02:22:12Z", "host": "web01", "event_type": "sudo_command", "match": {"username": "deploy"}, "description": "sudo /bin/bash"},
+            {"id": "S1-05", "ts_utc": "2026-10-03T02:24:40Z", "host": "web01", "event_type": "user_added", "match": {}, "description": "useradd support"},
+            {"id": "S1-06", "ts_utc": "2026-10-03T02:31:05Z", "host": "web01", "event_type": "session_closed", "match": {"username": "deploy"}, "description": "Session closed for deploy"}
         ],
         "triage_questions": [
             {"q": "When did the attacker first successfully log in (UTC)?", "answer": "2026-10-03T02:19:51Z"},
@@ -100,26 +102,27 @@ def generate_s1():
         "expected_skew": {}
     }
     write_json(base / "ground_truth.json", gt)
+    
+    return gt
 
 def generate_s2():
+    rng = random.Random(2)
     base = Path("scenarios/s2_web_attack")
     base.mkdir(parents=True, exist_ok=True)
     
     entries = []
     start_time = get_utc("2026-10-05T14:02:10Z")
     
-    # Noise
     for i in range(100):
-        dt = start_time - timedelta(minutes=random.randint(10, 60))
+        dt = start_time - timedelta(minutes=rng.randint(10, 60))
         entries.append((dt, "198.51.100.20", "GET", "/index.html", "200", "Mozilla/5.0"))
         
-    # Attack
-    entries.append((get_utc("2026-10-05T14:02:10Z"), "203.0.113.77", "GET", "/wp-login.php", "404", "Nikto"))
-    entries.append((get_utc("2026-10-05T14:09:33Z"), "203.0.113.77", "GET", "/products.php?id=1%27%20UNION%20SELECT", "200", "Nikto"))
-    entries.append((get_utc("2026-10-05T14:14:02Z"), "203.0.113.77", "GET", "/download?file=../../etc/passwd", "200", "Nikto"))
-    entries.append((get_utc("2026-10-05T14:18:47Z"), "203.0.113.77", "POST", "/upload.php", "200", "Nikto"))
-    entries.append((get_utc("2026-10-05T14:20:15Z"), "203.0.113.77", "GET", "/uploads/shell.php?cmd=id", "200", "Nikto"))
-    entries.append((get_utc("2026-10-05T14:27:40Z"), "203.0.113.77", "GET", "/admin", "404", "Nikto"))
+    entries.append((get_utc("2026-10-05T14:02:10Z"), "203.0.113.77", "GET", "/wp-login.php", "404", "Nikto/2.5"))
+    entries.append((get_utc("2026-10-05T14:09:33Z"), "203.0.113.77", "GET", "/products.php?id=1%27%20UNION%20SELECT%201,2", "200", "Nikto/2.5"))
+    entries.append((get_utc("2026-10-05T14:14:02Z"), "203.0.113.77", "GET", "/download?file=../../etc/passwd", "200", "Nikto/2.5"))
+    entries.append((get_utc("2026-10-05T14:18:47Z"), "203.0.113.77", "POST", "/upload.php", "200", "Nikto/2.5"))
+    entries.append((get_utc("2026-10-05T14:20:15Z"), "203.0.113.77", "GET", "/uploads/shell.php?cmd=id", "200", "Nikto/2.5"))
+    entries.append((get_utc("2026-10-05T14:27:40Z"), "203.0.113.77", "GET", "/admin", "404", "Nikto/2.5"))
     
     entries.sort(key=lambda x: x[0])
     
@@ -131,7 +134,7 @@ def generate_s2():
         ""
     ]
     
-    write_nginx(base / "access.log", 0, "+0000", entries, malformed)
+    write_nginx(base / "access.log", 0, "+0000", entries, malformed, rng=rng)
     
     sources = {
         "case_id": "s2_web_attack",
@@ -145,7 +148,12 @@ def generate_s2():
         "case_id": "s2_web_attack",
         "attacker_ips": ["203.0.113.77"],
         "steps": [
-            {"id": "S2-01", "ts_utc": "2026-10-05T14:02:10Z", "host": "web01", "event_type": "web_scan", "match": {"src_ip": "203.0.113.77"}, "description": "Scanner probe"}
+            {"id": "S2-01", "ts_utc": "2026-10-05T14:02:10Z", "host": "web01", "event_type": "web_scan", "match": {"src_ip": "203.0.113.77"}, "description": "Scanner probe"},
+            {"id": "S2-02", "ts_utc": "2026-10-05T14:09:33Z", "host": "web01", "event_type": "web_sqli_attempt", "match": {"src_ip": "203.0.113.77"}, "description": "SQLi attempt"},
+            {"id": "S2-03", "ts_utc": "2026-10-05T14:14:02Z", "host": "web01", "event_type": "web_path_traversal", "match": {"src_ip": "203.0.113.77"}, "description": "Path traversal"},
+            {"id": "S2-04", "ts_utc": "2026-10-05T14:18:47Z", "host": "web01", "event_type": "web_webshell_upload", "match": {"src_ip": "203.0.113.77"}, "description": "Webshell upload"},
+            {"id": "S2-05", "ts_utc": "2026-10-05T14:20:15Z", "host": "web01", "event_type": "web_webshell_access", "match": {"src_ip": "203.0.113.77"}, "description": "Webshell access"},
+            {"id": "S2-06", "ts_utc": "2026-10-05T14:27:40Z", "host": "web01", "event_type": "web_request", "match": {"src_ip": "203.0.113.77"}, "description": "Last attacker request"}
         ],
         "triage_questions": [
             {"q": "When did the attacker first successfully log in (UTC)?", "answer": "N/A"},
@@ -156,36 +164,44 @@ def generate_s2():
         "expected_skew": {}
     }
     write_json(base / "ground_truth.json", gt)
+    
+    return gt
 
 def generate_s3():
+    rng = random.Random(3)
     base = Path("scenarios/s3_clock_skew")
     base.mkdir(parents=True, exist_ok=True)
     
     web_nginx, web_auth = [], []
     db_nginx, db_auth = [], []
     
-    # S3 Anchors
+    for i in range(10):
+        web_auth.append((get_utc("2026-10-08T08:00:00Z") + timedelta(minutes=i), "sshd[123]", "Accepted publickey for alice from 198.51.100.10 port 50000 ssh2"))
+        
     start_time = get_utc("2026-10-08T09:00:00Z")
     paths = ["/admin", "/backup.sql", "/server-status", "/info.php", "/test", "/config", "/db", "/logs", "/metrics", "/api"]
     for i, p in enumerate(paths):
         dt = start_time + timedelta(seconds=i*2)
-        web_nginx.append((dt, "203.0.113.90", "GET", p, "404", "Scanner"))
-        db_nginx.append((dt + timedelta(seconds=random.randint(0, 2)), "203.0.113.90", "GET", p, "404", "Scanner"))
+        web_nginx.append((dt, "203.0.113.90", "GET", p, "404", "Nikto"))
+        db_nginx.append((dt + timedelta(seconds=rng.randint(0, 2)), "203.0.113.90", "GET", p, "404", "Nikto"))
         
-    web_nginx.append((get_utc("2026-10-08T09:05:30Z"), "203.0.113.90", "GET", "/search.php?q='UNION", "200", "Scanner"))
-    web_nginx.append((get_utc("2026-10-08T09:08:12Z"), "203.0.113.90", "GET", "/shell.php", "200", "Scanner"))
+    web_nginx.append((get_utc("2026-10-08T09:05:30Z"), "203.0.113.90", "GET", "/search.php?q=1%27%20UNION%20SELECT%201,2", "200", "Nikto"))
+    web_nginx.append((get_utc("2026-10-08T09:08:12Z"), "203.0.113.90", "GET", "/uploads/shell.php?cmd=id", "200", "Nikto"))
     
     db_auth.append((get_utc("2026-10-08T09:12:45Z"), "sshd[1234]", "Accepted password for dbadmin from 192.0.2.10 port 51122 ssh2"))
     db_auth.append((get_utc("2026-10-08T09:14:03Z"), "sudo", "dbadmin : TTY=pts/0 ; PWD=/home/dbadmin ; USER=root ; COMMAND=/bin/bash"))
-    db_nginx.append((get_utc("2026-10-08T09:15:30Z"), "203.0.113.90", "GET", "/export.php", "200", "Scanner"))
+    db_nginx.append((get_utc("2026-10-08T09:15:30Z"), "203.0.113.90", "GET", "/export.php", "200", "Nikto"))
     
-    write_nginx(base / "web01" / "access.log", 0, "+0000", web_nginx)
-    write_syslog(base / "web01" / "auth.log", "web01", 0, 0, web_auth)
+    web_nginx.sort(key=lambda x: x[0])
+    db_nginx.sort(key=lambda x: x[0])
+    web_auth.sort(key=lambda x: x[0])
+    db_auth.sort(key=lambda x: x[0])
+
+    write_nginx(base / "web01" / "access.log", 0, "+0000", web_nginx, rng=rng)
+    write_syslog(base / "web01" / "auth.log", "web01", 0, 0, web_auth, rng=rng)
     
-    # db01 runs 7 min fast (420s)
-    # Asia/Kolkata is UTC+5:30 (19800s)
-    write_nginx(base / "db01" / "access.log", 420, "+0000", db_nginx)
-    write_syslog(base / "db01" / "auth.log", "db01", 19800, 420, db_auth)
+    write_nginx(base / "db01" / "access.log", 420, "+0000", db_nginx, rng=rng)
+    write_syslog(base / "db01" / "auth.log", "db01", 19800, 420, db_auth, rng=rng)
     
     sources = {
         "case_id": "s3_clock_skew",
@@ -204,7 +220,12 @@ def generate_s3():
         "case_id": "s3_clock_skew",
         "attacker_ips": ["203.0.113.90"],
         "steps": [
-            {"id": "S3-04", "ts_utc": "2026-10-08T09:12:45Z", "host": "db01", "event_type": "ssh_accepted_login", "match": {"src_ip": "192.0.2.10", "username": "dbadmin"}, "description": "Pivot to DB"}
+            {"id": "S3-01", "ts_utc": "2026-10-08T09:00:00Z", "host": "web01", "event_type": "web_scan", "match": {"src_ip": "203.0.113.90"}, "description": "Scan web01"},
+            {"id": "S3-02", "ts_utc": "2026-10-08T09:05:30Z", "host": "web01", "event_type": "web_sqli_attempt", "match": {"src_ip": "203.0.113.90"}, "description": "SQLi web01"},
+            {"id": "S3-03", "ts_utc": "2026-10-08T09:08:12Z", "host": "web01", "event_type": "web_webshell_access", "match": {"src_ip": "203.0.113.90"}, "description": "Webshell web01"},
+            {"id": "S3-04", "ts_utc": "2026-10-08T09:12:45Z", "host": "db01", "event_type": "ssh_accepted_login", "match": {"src_ip": "192.0.2.10", "username": "dbadmin"}, "description": "Pivot to DB"},
+            {"id": "S3-05", "ts_utc": "2026-10-08T09:14:03Z", "host": "db01", "event_type": "sudo_command", "match": {"username": "dbadmin"}, "description": "sudo on db01"},
+            {"id": "S3-06", "ts_utc": "2026-10-08T09:15:30Z", "host": "db01", "event_type": "web_request", "match": {"src_ip": "203.0.113.90"}, "description": "Export on db01"}
         ],
         "triage_questions": [
             {"q": "When did the attacker first successfully log in (UTC)?", "answer": "2026-10-08T09:12:45Z"},
@@ -215,9 +236,45 @@ def generate_s3():
         "expected_skew": {"db01": -420}
     }
     write_json(base / "ground_truth.json", gt)
+    
+    return gt
+
+def check_files(gt, base_path):
+    print(f"[{gt['case_id']}] Checking expected gaps: {gt['expected_parse_gaps']}")
+    all_log_text = ""
+    for log in base_path.rglob("*.log"):
+        text = log.read_text(encoding="utf-8")
+        all_log_text += text
+        lines = len(text.splitlines())
+        print(f"  {log.relative_to(base_path.parent)}: {lines} lines")
+        
+    for step in gt["steps"]:
+        ts_utc = get_utc(step["ts_utc"])
+        host = step["host"]
+        
+        offset = 420 if host == "db01" else 0
+        if host == "db01" and step["event_type"] in ["ssh_accepted_login", "sudo_command"]:
+            offset += 19800
+            
+        local_dt = ts_utc + timedelta(seconds=offset)
+        
+        ts1 = local_dt.strftime("%b %e %H:%M:%S").replace(" 0", "  ")
+        ts2 = f"{local_dt:%b} {local_dt.day:2d} {local_dt:%H:%M:%S}"
+        ts3 = local_dt.strftime("%d/%b/%Y:%H:%M:%S")
+        
+        if ts1 not in all_log_text and ts2 not in all_log_text and ts3 not in all_log_text:
+            print(f"Assertion failed for step {step['id']} at time {step['ts_utc']}")
+            import sys
+            sys.exit(1)
 
 if __name__ == "__main__":
-    generate_s1()
-    generate_s2()
-    generate_s3()
+    s1 = generate_s1()
+    check_files(s1, Path("scenarios/s1_ssh_bruteforce"))
+    
+    s2 = generate_s2()
+    check_files(s2, Path("scenarios/s2_web_attack"))
+    
+    s3 = generate_s3()
+    check_files(s3, Path("scenarios/s3_clock_skew"))
+    
     print("Scenarios generated successfully.")
