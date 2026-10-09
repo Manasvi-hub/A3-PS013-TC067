@@ -24,6 +24,44 @@
         "username": "deploy"
       },
       "description": "First successful login (the answer to 'when did they get in?')"
+    },
+    {
+      "id": "S1-03",
+      "ts_utc": "2026-10-03T02:20:30Z",
+      "host": "web01",
+      "event_type": "session_opened",
+      "match": {
+        "username": "deploy"
+      },
+      "description": "Session opened for deploy"
+    },
+    {
+      "id": "S1-04",
+      "ts_utc": "2026-10-03T02:22:12Z",
+      "host": "web01",
+      "event_type": "sudo_command",
+      "match": {
+        "username": "deploy"
+      },
+      "description": "sudo /bin/bash"
+    },
+    {
+      "id": "S1-05",
+      "ts_utc": "2026-10-03T02:24:40Z",
+      "host": "web01",
+      "event_type": "user_added",
+      "match": {},
+      "description": "useradd support"
+    },
+    {
+      "id": "S1-06",
+      "ts_utc": "2026-10-03T02:31:05Z",
+      "host": "web01",
+      "event_type": "session_closed",
+      "match": {
+        "username": "deploy"
+      },
+      "description": "Session closed for deploy"
     }
   ],
   "triage_questions": [
