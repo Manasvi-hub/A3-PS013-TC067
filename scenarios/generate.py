@@ -47,14 +47,21 @@ def generate_s1():
     entries = []
     start_time = get_utc("2026-10-03T02:14:07Z")
     
-    for i in range(100):
-        dt = start_time - timedelta(minutes=rng.randint(10, 60))
+    for i in range(10):
+        dt = start_time - timedelta(minutes=rng.randint(10, 600))
         entries.append((dt, "sshd[100]", "Accepted publickey for alice from 198.51.100.10 port 50000 ssh2"))
     
     for i in range(150):
         dt = start_time + timedelta(seconds=i*2)
-        user = rng.choice(["root", "admin", "test", "oracle"])
-        msg = f"Failed password for invalid user {user} from 203.0.113.50 port 51122 ssh2"
+        user = rng.choice(["root", "admin", "test", "oracle", "deploy"])
+        is_valid = user in ["root", "deploy"]
+        if i == 0:
+            user = "admin"
+            is_valid = False
+        if is_valid:
+            msg = f"Failed password for {user} from 203.0.113.50 port 51122 ssh2"
+        else:
+            msg = f"Failed password for invalid user {user} from 203.0.113.50 port 51122 ssh2"
         entries.append((dt, "sshd[1234]", msg))
         
     entries.append((get_utc("2026-10-03T02:19:51Z"), "sshd[1234]", "Accepted password for deploy from 203.0.113.50 port 51122 ssh2"))
@@ -66,7 +73,7 @@ def generate_s1():
     entries.sort(key=lambda x: x[0])
     
     malformed = [
-        "Oct  3 02:15:00 web01 sshd[1]: Truncated line",
+        "Oct  3 02:15:00 web01 sshd[1",
         "\x00\x01\x02garbled binary",
         "Feb 30 02:15:00 web01 sshd[1]: Bad date",
         "Just some random text not matching syslog"
@@ -86,7 +93,7 @@ def generate_s1():
         "case_id": "s1_ssh_bruteforce",
         "attacker_ips": ["203.0.113.50"],
         "steps": [
-            {"id": "S1-01", "ts_utc": "2026-10-03T02:14:07Z", "host": "web01", "event_type": "ssh_failed_login", "match": {"src_ip": "203.0.113.50"}, "description": "First brute-force attempt"},
+            {"id": "S1-01", "ts_utc": "2026-10-03T02:14:07Z", "host": "web01", "event_type": "ssh_invalid_user", "match": {"src_ip": "203.0.113.50"}, "description": "First brute-force attempt"},
             {"id": "S1-02", "ts_utc": "2026-10-03T02:19:51Z", "host": "web01", "event_type": "ssh_accepted_login", "match": {"src_ip": "203.0.113.50", "username": "deploy"}, "description": "First successful login (the answer to 'when did they get in?')"},
             {"id": "S1-03", "ts_utc": "2026-10-03T02:20:30Z", "host": "web01", "event_type": "session_opened", "match": {"username": "deploy"}, "description": "Session opened for deploy"},
             {"id": "S1-04", "ts_utc": "2026-10-03T02:22:12Z", "host": "web01", "event_type": "sudo_command", "match": {"username": "deploy"}, "description": "sudo /bin/bash"},
@@ -153,7 +160,7 @@ def generate_s2():
             {"id": "S2-03", "ts_utc": "2026-10-05T14:14:02Z", "host": "web01", "event_type": "web_path_traversal", "match": {"src_ip": "203.0.113.77"}, "description": "Path traversal"},
             {"id": "S2-04", "ts_utc": "2026-10-05T14:18:47Z", "host": "web01", "event_type": "web_webshell_upload", "match": {"src_ip": "203.0.113.77"}, "description": "Webshell upload"},
             {"id": "S2-05", "ts_utc": "2026-10-05T14:20:15Z", "host": "web01", "event_type": "web_webshell_access", "match": {"src_ip": "203.0.113.77"}, "description": "Webshell access"},
-            {"id": "S2-06", "ts_utc": "2026-10-05T14:27:40Z", "host": "web01", "event_type": "web_request", "match": {"src_ip": "203.0.113.77"}, "description": "Last attacker request"}
+            {"id": "S2-06", "ts_utc": "2026-10-05T14:27:40Z", "host": "web01", "event_type": "web_scan", "match": {"src_ip": "203.0.113.77"}, "description": "Last attacker request"}
         ],
         "triage_questions": [
             {"q": "When did the attacker first successfully log in (UTC)?", "answer": "N/A"},
@@ -190,7 +197,7 @@ def generate_s3():
     
     db_auth.append((get_utc("2026-10-08T09:12:45Z"), "sshd[1234]", "Accepted password for dbadmin from 192.0.2.10 port 51122 ssh2"))
     db_auth.append((get_utc("2026-10-08T09:14:03Z"), "sudo", "dbadmin : TTY=pts/0 ; PWD=/home/dbadmin ; USER=root ; COMMAND=/bin/bash"))
-    db_nginx.append((get_utc("2026-10-08T09:15:30Z"), "203.0.113.90", "GET", "/export.php", "200", "Nikto"))
+    db_nginx.append((get_utc("2026-10-08T09:15:30Z") + timedelta(seconds=rng.randint(0, 2)), "203.0.113.90", "GET", "/export.php", "200", "Mozilla/5.0 (X11; Linux x86_64) Chrome/118.0"))
     
     web_nginx.sort(key=lambda x: x[0])
     db_nginx.sort(key=lambda x: x[0])
@@ -256,16 +263,29 @@ def check_files(gt, base_path):
         if host == "db01" and step["event_type"] in ["ssh_accepted_login", "sudo_command"]:
             offset += 19800
             
-        local_dt = ts_utc + timedelta(seconds=offset)
-        
-        ts1 = local_dt.strftime("%b %e %H:%M:%S").replace(" 0", "  ")
-        ts2 = f"{local_dt:%b} {local_dt.day:2d} {local_dt:%H:%M:%S}"
-        ts3 = local_dt.strftime("%d/%b/%Y:%H:%M:%S")
-        
-        if ts1 not in all_log_text and ts2 not in all_log_text and ts3 not in all_log_text:
+        found = False
+        for jitter in range(3):
+            test_dt = local_dt + timedelta(seconds=jitter if host == "db01" else 0)
+            ts1 = test_dt.strftime("%b %e %H:%M:%S").replace(" 0", "  ")
+            ts2 = f"{test_dt:%b} {test_dt.day:2d} {test_dt:%H:%M:%S}"
+            ts3 = test_dt.strftime("%d/%b/%Y:%H:%M:%S")
+            if ts1 in all_log_text or ts2 in all_log_text or ts3 in all_log_text:
+                found = True
+                break
+                
+        if not found:
             print(f"Assertion failed for step {step['id']} at time {step['ts_utc']}")
             import sys
             sys.exit(1)
+            
+    expected = gt["expected_parse_gaps"]
+    print(f"  Expected malformed lines (gaps): {expected}")
+    if gt["case_id"] == "s1_ssh_bruteforce":
+        assert expected == 4
+    elif gt["case_id"] == "s2_web_attack":
+        assert expected == 5
+    elif gt["case_id"] == "s3_clock_skew":
+        assert expected == 0
 
 if __name__ == "__main__":
     s1 = generate_s1()

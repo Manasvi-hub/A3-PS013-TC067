@@ -8,7 +8,7 @@
       "id": "S1-01",
       "ts_utc": "2026-10-03T02:14:07Z",
       "host": "web01",
-      "event_type": "ssh_failed_login",
+      "event_type": "ssh_invalid_user",
       "match": {
         "src_ip": "203.0.113.50"
       },
