@@ -1,0 +1,26 @@
+# Person A owns these:
+/src/forensic/models.py @a
+/src/forensic/schema.sql @a
+/src/forensic/db.py @a
+/src/forensic/ingest.py @a
+/src/forensic/parsers/ @a
+/src/forensic/normalize.py @a
+/src/forensic/skew.py @a
+/src/forensic/build.py @a
+/src/forensic/cli_evidence.py @a
+/tests/test_ingest.py @a
+/tests/test_parsers.py @a
+/tests/test_normalize.py @a
+/tests/test_skew.py @a
+
+# Person B owns these:
+/src/forensic/timeline.py @b
+/src/forensic/report.py @b
+/src/forensic/templates/ @b
+/src/forensic/cli_analysis.py @b
+/viewer/ @b
+/scenarios/ @b
+/tests/test_ground_truth.py @b
+/tests/test_timeline_report.py @b
+/evaluation/ @b
+/docs/ @b
