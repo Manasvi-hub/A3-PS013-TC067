@@ -4,6 +4,7 @@ from pathlib import Path
 from forensic.timeline import query_events, Filters
 import json
 import subprocess
+import sys
 
 app = typer.Typer()
 
@@ -24,7 +25,8 @@ def search(
     ip: str = typer.Option(None, help="Filter by source IP"),
     type: str = typer.Option(None, help="Filter by event type"),
     ts_from: str = typer.Option(None, "--from", help="Start time (ISO UTC)"),
-    ts_to: str = typer.Option(None, "--to", help="End time (ISO UTC)")
+    ts_to: str = typer.Option(None, "--to", help="End time (ISO UTC)"),
+    limit: int = typer.Option(200, "--limit", help="Max results")
 ):
     conn = get_conn(case)
     f = Filters(
@@ -35,9 +37,9 @@ def search(
         ts_from=ts_from,
         ts_to=ts_to
     )
-    events = query_events(conn, f)
+    events = query_events(conn, f, limit=limit)
     for e in events:
-        typer.echo(f"{e['ts_utc_corrected']} | {e['host']} | {e['event_type']} | {e['src_ip']} | {e['message']}")
+        typer.echo(f"{e['ts_utc_corrected']} | {e['host']} | {e['event_type']} | {e.get('src_ip', '')} | {e['message']}")
 
 @app.command()
 def report(
@@ -53,4 +55,5 @@ def report(
 @app.command()
 def ui(case: Path = typer.Option(..., "--case", help="Case directory")):
     typer.echo(f"Launching Streamlit viewer for {case}...")
-    subprocess.run(["streamlit", "run", "viewer/app.py", "--", "--case", str(case)])
+    app_path = Path(__file__).resolve().parents[2] / "viewer" / "app.py"
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), "--", "--case", str(case)])
