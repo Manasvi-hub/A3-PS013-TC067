@@ -1,0 +1,34 @@
+{
+  "case_id": "s2_web_attack",
+  "attacker_ips": [
+    "203.0.113.77"
+  ],
+  "steps": [
+    {
+      "id": "S2-01",
+      "ts_utc": "2026-10-05T14:02:10Z",
+      "host": "web01",
+      "event_type": "web_scan",
+      "match": {
+        "src_ip": "203.0.113.77"
+      },
+      "description": "Scanner probe"
+    }
+  ],
+  "triage_questions": [
+    {
+      "q": "When did the attacker first successfully log in (UTC)?",
+      "answer": "N/A"
+    },
+    {
+      "q": "Which source IP?",
+      "answer": "203.0.113.77"
+    },
+    {
+      "q": "What was the first privileged command run?",
+      "answer": "N/A"
+    }
+  ],
+  "expected_parse_gaps": 5,
+  "expected_skew": {}
+}

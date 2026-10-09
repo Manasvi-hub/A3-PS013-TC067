@@ -1,0 +1,45 @@
+{
+  "case_id": "s1_ssh_bruteforce",
+  "attacker_ips": [
+    "203.0.113.50"
+  ],
+  "steps": [
+    {
+      "id": "S1-01",
+      "ts_utc": "2026-10-03T02:14:07Z",
+      "host": "web01",
+      "event_type": "ssh_failed_login",
+      "match": {
+        "src_ip": "203.0.113.50"
+      },
+      "description": "First brute-force attempt"
+    },
+    {
+      "id": "S1-02",
+      "ts_utc": "2026-10-03T02:19:51Z",
+      "host": "web01",
+      "event_type": "ssh_accepted_login",
+      "match": {
+        "src_ip": "203.0.113.50",
+        "username": "deploy"
+      },
+      "description": "First successful login (the answer to 'when did they get in?')"
+    }
+  ],
+  "triage_questions": [
+    {
+      "q": "When did the attacker first successfully log in (UTC)?",
+      "answer": "2026-10-03T02:19:51Z"
+    },
+    {
+      "q": "Which source IP?",
+      "answer": "203.0.113.50"
+    },
+    {
+      "q": "What was the first privileged command run?",
+      "answer": "sudo /bin/bash"
+    }
+  ],
+  "expected_parse_gaps": 4,
+  "expected_skew": {}
+}
