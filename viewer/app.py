@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 import altair as alt
 
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from forensic.timeline import query_events, Filters, summary_stats, gap_summary, skew_summary, evidence_manifest, context_window
 
 st.set_page_config(page_title="Forensic Viewer", layout="wide")
