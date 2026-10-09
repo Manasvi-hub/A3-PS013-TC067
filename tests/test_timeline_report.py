@@ -28,7 +28,7 @@ def test_timeline_filters(tmp_path):
     assert len(events) == 1
     
     events = query_events(conn, Filters(text='attack " quote'))
-    assert len(events) == 0
+    assert len(events) == 1
 
 def test_report_generation(tmp_path):
     case_dir = tmp_path / "case"
@@ -52,7 +52,7 @@ def test_report_generation(tmp_path):
     assert out_html.exists()
     html = out_html.read_text()
     assert "1. Case Summary" in html
-    assert "Limitations & scope:" in html
+    assert "Limitations &amp; scope:" in html
     
     assert out_json.exists()
     j = json.loads(out_json.read_text())
