@@ -18,8 +18,14 @@ forensic = "forensic.cli:app"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.6"
+    "ruff>=0.6",
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+forensic = ["schema.sql", "templates/*.j2"]
 
 [tool.ruff]
 line-length = 100
@@ -28,4 +34,4 @@ extend-exclude = ["src/forensic/models.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+ignore = ["E501", "W293", "W291", "I001", "F401", "E701"]

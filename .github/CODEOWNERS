@@ -7,11 +7,19 @@
 /src/forensic/normalize.py @gayatri-karanjkar
 /src/forensic/skew.py @gayatri-karanjkar
 /src/forensic/build.py @gayatri-karanjkar
+/src/forensic/pipeline.py @gayatri-karanjkar
+/src/forensic/cli.py @gayatri-karanjkar
 /src/forensic/cli_evidence.py @gayatri-karanjkar
+/pyproject.toml @gayatri-karanjkar
+/.gitignore @gayatri-karanjkar
+/.github/CODEOWNERS @gayatri-karanjkar
+/tests/fixtures/ @gayatri-karanjkar
 /tests/test_ingest.py @gayatri-karanjkar
 /tests/test_parsers.py @gayatri-karanjkar
 /tests/test_normalize.py @gayatri-karanjkar
 /tests/test_skew.py @gayatri-karanjkar
+/tests/test_build.py @gayatri-karanjkar
+/tests/test_pipeline.py @gayatri-karanjkar
 
 # Person B owns these:
 /src/forensic/timeline.py @Manasvi-hub
@@ -22,5 +30,6 @@
 /scenarios/ @Manasvi-hub
 /tests/test_ground_truth.py @Manasvi-hub
 /tests/test_timeline_report.py @Manasvi-hub
+/tests/test_viewer_imports.py @Manasvi-hub
 /evaluation/ @Manasvi-hub
 /docs/ @Manasvi-hub

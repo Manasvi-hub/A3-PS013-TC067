@@ -1,0 +1,13 @@
+scenario,tester,condition,question_id,seconds,correct,notes
+s1_ssh_bruteforce,Gayatri,manual,1,120,true,Used grep and sort
+s1_ssh_bruteforce,Gayatri,manual,2,30,true,
+s1_ssh_bruteforce,Gayatri,manual,3,45,true,
+s1_ssh_bruteforce,Gayatri,manual,4,60,true,
+s2_web_attack,Gayatri,manual,1,90,true,
+s2_web_attack,Gayatri,manual,2,20,true,
+s2_web_attack,Gayatri,manual,3,45,true,
+s2_web_attack,Gayatri,manual,4,50,true,
+s3_clock_skew,Manasvi,tool,1,45,true,Viewer made skew trivial
+s3_clock_skew,Manasvi,tool,2,15,true,
+s3_clock_skew,Manasvi,tool,3,20,true,
+s3_clock_skew,Manasvi,tool,4,30,true,Clear causal order in timeline

@@ -43,6 +43,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
   message, raw_line, username, src_ip, detail,
   content='events', content_rowid='id'
 );
+-- build.py must populate events_fts after loading events:
+--   INSERT INTO events_fts(rowid, message, raw_line, username, src_ip, detail)
+--   SELECT id, message, raw_line, username, src_ip, detail FROM events;
 
 CREATE TABLE IF NOT EXISTS parse_gaps (
   id           INTEGER PRIMARY KEY,

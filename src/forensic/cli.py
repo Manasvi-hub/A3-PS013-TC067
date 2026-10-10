@@ -3,21 +3,11 @@ from pathlib import Path
 
 import typer
 
+from forensic.cli_analysis import app as analysis_app
 from forensic.cli_evidence import app as evidence_app
 
-# TODO: remove after merge with main
-try:
-    from forensic.cli_analysis import app as analysis_app
-except ImportError:
-    analysis_app = None
-
 app = typer.Typer(help="Forensic Timeline & Evidence Collection Tool", no_args_is_help=True)
-
-_subs = [evidence_app]
-if analysis_app is not None:
-    _subs.append(analysis_app)
-
-for _sub in _subs:
+for _sub in (evidence_app, analysis_app):
     for _cmd in _sub.registered_commands:
         app.registered_commands.append(_cmd)
 
