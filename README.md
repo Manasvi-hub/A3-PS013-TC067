@@ -76,3 +76,32 @@ Verification ensures that the collected evidence has not been tampered with:
 - `docs/`: Documentation (including implementation guides).
 - `cases/`: Generated case output directories (git-ignored).
 - `scenarios/`: Example input scenarios for testing (handled by Person B).
+
+## Demo walkthrough
+
+- `forensic run-all`: Processes all scenarios through ingest, build, skew, and report generation.
+- `forensic verify --case cases/s3_clock_skew`: Verifies evidence integrity against the generated manifest hashes.
+- Tamper one stored evidence file then verify again: Demonstrates that the verify command detects any unauthorized modification to the read-only evidence store.
+- `forensic search --case cases/s2_web_attack "UNION"`: Performs a full-text search to find SQL injection attempts in the database.
+- `forensic report --case cases/s3_clock_skew --out reports/s3_clock_skew.html`: Generates an interactive HTML summary report for the scenario.
+- `forensic ui --case cases/s3_clock_skew`: Starts a local web server to interactively explore the timeline data.
+
+## Scenarios
+
+| Scenario | Expected Parse Gaps | Expected Skew |
+|---|---|---|
+| S1 SSH brute force | 4 | None |
+| S2 web attack | 5 | None |
+| S3 clock skew | 0 | db01 about -420 seconds |
+
+## Results
+
+<!-- RESULTS -->
+
+## Deliverables
+
+- [x] [docs/pseudocode.md](docs/pseudocode.md)
+- [x] [docs/demo_script.md](docs/demo_script.md)
+- [x] [A3-PS013-TC067.pdf](A3-PS013-TC067.pdf)
+- [x] [evaluation/triage_summary.md](evaluation/triage_summary.md)
+- [x] [evaluation/parsing_gap_analysis.md](evaluation/parsing_gap_analysis.md)
