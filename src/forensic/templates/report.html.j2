@@ -40,6 +40,13 @@
         </tr>
         {% endfor %}
     </table>
+    {% if integrity_checks %}
+    <p><small>Integrity checks:
+        {% for c in integrity_checks %}
+        {{ c.file }}: {{ c.status }}{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </small></p>
+    {% endif %}
     
     <h2>4. Time Handling</h2>
     <table>
