@@ -4,7 +4,6 @@
 
 | Scenario | Host | File | Total Lines | Parsed | Gaps | Blank | Parsed % | Reasons |
 |---|---|---|---|---|---|---|---|---|
-| s1_fake | web01 | auth.log | 10 | 2 | 0 | 0 | 20.00% | None |
 | s1_ssh_bruteforce | web01 | auth.log | 169 | 165 | 4 | 0 | 97.63% | bad_timestamp: 1, no_regex_match: 3 |
 | s2_web_attack | web01 | access.log | 111 | 106 | 5 | 1 | 96.36% | empty_line: 1, no_regex_match: 3, truncated: 1 |
 | s3_clock_skew | web01 | auth.log | 10 | 10 | 0 | 0 | 100.00% | None |

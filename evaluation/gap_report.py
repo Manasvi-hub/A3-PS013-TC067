@@ -15,8 +15,20 @@ def main():
     out_lines.append("| Scenario | Host | File | Total Lines | Parsed | Gaps | Blank | Parsed % | Reasons |")
     out_lines.append("|---|---|---|---|---|---|---|---|---|")
     
+    import json
+    valid_cases = set()
+    for sources_file in Path("scenarios").rglob("sources.json"):
+        with open(sources_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if "case_id" in data:
+                valid_cases.add(data["case_id"])
+                
     for case_path in sorted(cases_dir.iterdir()):
         if not case_path.is_dir():
+            continue
+            
+        if case_path.name not in valid_cases:
+            print(f"Warning: skipping {case_path.name} as it is not a scenario case_id.")
             continue
             
         db_path = case_path / "case.db"

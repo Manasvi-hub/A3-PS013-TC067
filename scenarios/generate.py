@@ -260,16 +260,17 @@ def check_files(gt, base_path):
         host = step["host"]
         
         offset = 420 if host == "db01" else 0
-        if host == "db01" and step["event_type"] in ["ssh_accepted_login", "sudo_command"]:
+        if host == "db01" and step["event_type"] in ["ssh_accepted_login", "sudo_command", "session_opened", "session_closed", "user_added"]:
             offset += 19800
+            
+        local_dt = ts_utc + timedelta(seconds=offset)
             
         found = False
         for jitter in range(3):
             test_dt = local_dt + timedelta(seconds=jitter if host == "db01" else 0)
-            ts1 = test_dt.strftime("%b %e %H:%M:%S").replace(" 0", "  ")
-            ts2 = f"{test_dt:%b} {test_dt.day:2d} {test_dt:%H:%M:%S}"
-            ts3 = test_dt.strftime("%d/%b/%Y:%H:%M:%S")
-            if ts1 in all_log_text or ts2 in all_log_text or ts3 in all_log_text:
+            ts1 = f"{test_dt:%b} {test_dt.day:2d} {test_dt:%H:%M:%S}"
+            ts2 = test_dt.strftime("%d/%b/%Y:%H:%M:%S")
+            if ts1 in all_log_text or ts2 in all_log_text:
                 found = True
                 break
                 
