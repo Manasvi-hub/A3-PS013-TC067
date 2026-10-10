@@ -8,6 +8,7 @@ import altair as alt
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from forensic.timeline import query_events, Filters, summary_stats, gap_summary, skew_summary, evidence_manifest, context_window
+from forensic.ingest import verify_items
 
 st.set_page_config(page_title="Forensic Viewer", layout="wide")
 
@@ -125,7 +126,26 @@ with tab3:
     evs = evidence_manifest(conn)
     if evs:
         if st.button("Verify integrity"):
-            st.error("Verification not available (ingest.py missing).")
+            try:
+                res = verify_items(case_dir)
+                st.session_state["verify_result"] = res
+            except Exception as e:
+                st.exception(e)
+                
+        if "verify_result" in st.session_state:
+            res = st.session_state["verify_result"]
+            df_v = pd.DataFrame(res)
+            def color_status(val):
+                return 'color: green' if val == 'OK' else 'color: red'
+            
+            st.dataframe(df_v.style.map(color_status, subset=['status']))
+            n_ok = sum(1 for r in res if r['status'] == 'OK')
+            m_prob = len(res) - n_ok
+            if m_prob == 0:
+                st.success(f"{n_ok} OK, {m_prob} problems")
+            else:
+                st.error(f"{n_ok} OK, {m_prob} problems")
+                
         st.dataframe(pd.DataFrame(evs))
     else:
         st.write("No evidence records found.")
