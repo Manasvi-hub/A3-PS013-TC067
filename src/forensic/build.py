@@ -102,6 +102,7 @@ def build(case_dir: Path) -> list[dict]:
             "filename": ev["filename"],
             "host": ev["host"],
             "total_lines": total_lines,
+            "blank_lines": blank_count,
             "parsed": len(events),
             "gaps": len(gaps),
             "parsed_pct": round(parsed_pct, 1),

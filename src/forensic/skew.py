@@ -44,13 +44,17 @@ def skew(
     case_dir: Path,
     reference_host: str | None = None,
     manual_offsets: str | list[str] | None = None,
-) -> None:
+    offsets: str | list[str] | None = None,
+) -> list[dict]:
+    if offsets is not None and manual_offsets is None:
+        manual_offsets = offsets
+
     conn = db.connect(case_dir)
     try:
         hosts = [row["host"] for row in conn.execute("SELECT DISTINCT host FROM events").fetchall()]
         if not hosts:
             print("No hosts found in events.")
-            return
+            return []
 
         # Resolve reference host: argument > case_meta > host with most events
         if not reference_host:
@@ -72,7 +76,7 @@ def skew(
 
         if reference_host not in hosts:
             print(f"Reference host '{reference_host}' not found in events.")
-            return
+            return []
 
         # Parse manual offsets (support single string or list of strings)
         parsed_manual: dict[str, float] = {}
@@ -85,7 +89,7 @@ def skew(
                     parsed_manual[h] = off
                 except ValueError as exc:
                     print(str(exc))
-                    return
+                    return []
 
         conn.execute("DELETE FROM skew_corrections")
 
@@ -205,7 +209,24 @@ def skew(
                 apply_offset(conn, host, 0.0)
                 print(f"  {host}: insufficient anchors ({n}<3), no correction applied")
 
+        rows = conn.execute(
+            "SELECT host, reference_host, offset_s, method, anchor_count, confidence_note "
+            "FROM skew_corrections ORDER BY host"
+        ).fetchall()
+        result_rows = [
+            {
+                "host": r["host"],
+                "reference_host": r["reference_host"],
+                "offset_s": r["offset_s"],
+                "method": r["method"],
+                "anchor_count": r["anchor_count"],
+                "confidence_note": r["confidence_note"],
+            }
+            for r in rows
+        ]
+
         conn.commit()
         print("Skew estimation complete.")
+        return result_rows
     finally:
         conn.close()
