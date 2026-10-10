@@ -6,9 +6,10 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from forensic import db, ingest
-from forensic.cli_evidence import evidence_app
+from forensic.cli_evidence import app as evidence_app
 
 runner = CliRunner()
+
 
 def test_ingest_basic():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
@@ -22,12 +23,19 @@ def test_ingest_basic():
         auth_log.write_bytes(raw_content)
 
         sources_json = src_dir / "sources.json"
-        sources_json.write_text(json.dumps({
-            "case_id": "s1",
-            "sources": [
-                {"path": "auth.log", "host": "web01", "source_type": "auth_log", "declared_tz": "UTC"}
-            ]
-        }))
+        sources_json.write_text(
+            json.dumps({
+                "case_id": "s1",
+                "sources": [
+                    {
+                        "path": "auth.log",
+                        "host": "web01",
+                        "source_type": "auth_log",
+                        "declared_tz": "UTC",
+                    }
+                ],
+            })
+        )
 
         ingest.ingest(case_dir, sources_json, "test_collector")
 
@@ -66,6 +74,71 @@ def test_ingest_basic():
         res = runner.invoke(evidence_app, ["verify", "--case", str(case_dir)])
         assert res.exit_code == 1
 
+
+def test_verify_items_details():
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
+        tdp = Path(td)
+        case_dir = tdp / "cases" / "s_items"
+        src_dir = tdp / "src"
+        src_dir.mkdir(parents=True)
+
+        auth_log = src_dir / "auth.log"
+        auth_log.write_bytes(b"auth content\n")
+
+        sources_json = src_dir / "sources.json"
+        sources_json.write_text(
+            json.dumps({
+                "case_id": "s_items",
+                "sources": [
+                    {
+                        "path": "auth.log",
+                        "host": "web01",
+                        "source_type": "auth_log",
+                        "declared_tz": "UTC",
+                    }
+                ],
+            })
+        )
+
+        ingest.ingest(case_dir, sources_json, "test")
+
+        # 1. Clean case: verify_items all OK, self-hash OK
+        items = ingest.verify_items(case_dir)
+        assert len(items) == 2  # manifest.json + 1 evidence file
+        manifest_item = next(it for it in items if it["file"] == "manifest.json")
+        assert manifest_item["status"] == "OK"
+        ev_item = next(it for it in items if it["file"] != "manifest.json")
+        assert ev_item["status"] == "OK"
+
+        dest = case_dir / "evidence" / "web01__auth.log"
+
+        # 2. Tampered after 1-byte change
+        dest.chmod(0o666)
+        dest.write_bytes(b"auth content!\n")
+        items_tampered = ingest.verify_items(case_dir)
+        ev_item_tampered = next(it for it in items_tampered if it["file"] != "manifest.json")
+        assert ev_item_tampered["status"] == "TAMPERED"
+
+        # 3. Missing after deleting stored file
+        dest.unlink()
+        items_missing = ingest.verify_items(case_dir)
+        ev_item_missing = next(it for it in items_missing if it["file"] != "manifest.json")
+        assert ev_item_missing["status"] == "MISSING"
+
+        # Re-ingest to restore clean state
+        ingest.ingest(case_dir, sources_json, "test")
+
+        # 4. Mismatch for count mismatch
+        conn = db.connect(case_dir)
+        conn.execute("DELETE FROM evidence")
+        conn.commit()
+        conn.close()
+
+        items_mismatch = ingest.verify_items(case_dir)
+        mismatch_item = next(it for it in items_mismatch if it["file"] == "evidence rows")
+        assert mismatch_item["status"] == "MISMATCH"
+
+
 def test_ingest_verify_failures():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         tdp = Path(td)
@@ -77,10 +150,19 @@ def test_ingest_verify_failures():
         auth_log.write_bytes(b"dummy")
 
         sources_json = src_dir / "sources.json"
-        sources_json.write_text(json.dumps({
-            "case_id": "s2",
-            "sources": [{"path": "auth.log", "host": "web01", "source_type": "auth_log", "declared_tz": "UTC"}]
-        }))
+        sources_json.write_text(
+            json.dumps({
+                "case_id": "s2",
+                "sources": [
+                    {
+                        "path": "auth.log",
+                        "host": "web01",
+                        "source_type": "auth_log",
+                        "declared_tz": "UTC",
+                    }
+                ],
+            })
+        )
 
         ingest.ingest(case_dir, sources_json, "test")
         dest = case_dir / "evidence" / "web01__auth.log"
