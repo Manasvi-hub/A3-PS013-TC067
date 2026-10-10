@@ -20,3 +20,6 @@ def test_viewer_imports():
                         
     if missing:
         pytest.fail("\n".join(missing))
+        
+    import forensic.ingest
+    assert hasattr(forensic.ingest, 'verify_items')

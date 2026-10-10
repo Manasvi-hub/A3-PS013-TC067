@@ -1,3 +1,6 @@
+"""
+DEV ONLY: builds a fake case for UI development. Never use for demos or reports.
+"""
 import sqlite3
 import json
 from pathlib import Path
