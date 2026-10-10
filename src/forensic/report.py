@@ -9,7 +9,7 @@ def get_verification(case_dir: Path):
     try:
         from forensic.ingest import verify_items
         return verify_items(case_dir)
-    except Exception:
+    except ImportError:
         # Mocking for testing if ingest isn't available
         return []
 
@@ -32,7 +32,11 @@ def generate_report(case_dir: Path, out_html: Path, out_json: Path = None, out_c
     # map verify status
     v_map = {v["file"]: v["status"] for v in verify_status}
     for m in manifest:
-        m["verify_status"] = v_map.get(m["filename"], "UNKNOWN")
+        m["verify_status"] = v_map.get(m["stored_path"], "UNKNOWN")
+        m["status"] = m["verify_status"]
+        
+    manifest_paths = {m["stored_path"] for m in manifest}
+    integrity_checks = [v for v in verify_status if v["file"] not in manifest_paths]
 
     templates_dir = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=True)
@@ -46,6 +50,7 @@ def generate_report(case_dir: Path, out_html: Path, out_json: Path = None, out_c
         gaps=gaps,
         skews=skews,
         manifest=manifest,
+        integrity_checks=integrity_checks,
         limitations="Limitations & scope: No live endpoint takeover, no malware removal, not forensically certified, declared-timezone and anchor-simultaneity assumptions, synthetic data."
     )
     
@@ -66,6 +71,7 @@ def generate_report(case_dir: Path, out_html: Path, out_json: Path = None, out_c
         out_json.write_text(json.dumps(data, indent=2), encoding="utf-8")
         
     if out_csv:
+        ev_id_to_path = {m["id"]: m["stored_path"] for m in manifest}
         out_csv.parent.mkdir(parents=True, exist_ok=True)
         with open(out_csv, 'w', newline='', encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -74,7 +80,7 @@ def generate_report(case_dir: Path, out_html: Path, out_json: Path = None, out_c
                 writer.writerow([
                     e["ts_utc_corrected"], e["ts_utc"], e["ts_original"], e["host"],
                     e["event_type"], e["severity"], e.get("src_ip", ""), e.get("username", ""),
-                    e["message"], e.get("evidence_id", ""), e.get("line_no", "")
+                    e["message"], ev_id_to_path.get(e.get("evidence_id"), ""), e.get("line_no", "")
                 ])
     
     conn.close()
