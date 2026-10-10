@@ -1,7 +1,8 @@
 import sqlite3
 from pathlib import Path
-from typing import List
+
 from .models import Event, ParseGap
+
 
 def connect(case_dir: Path) -> sqlite3.Connection:
     db_path = case_dir / "case.db"
@@ -23,17 +24,17 @@ def insert_evidence(conn: sqlite3.Connection, **fields) -> int:
     conn.commit()
     return cur.lastrowid
 
-def insert_events(conn: sqlite3.Connection, evidence_id: int, events: List[Event]) -> None:
+def insert_events(conn: sqlite3.Connection, evidence_id: int, events: list[Event]) -> None:
     if not events:
         return
-    
+
     query = """
     INSERT INTO events (
-        evidence_id, line_no, byte_offset, ts_original, ts_utc, ts_utc_corrected, 
+        evidence_id, line_no, byte_offset, ts_original, ts_utc, ts_utc_corrected,
         host, source_type, event_type, severity, src_ip, username, detail, message, raw_line
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
-    
+
     rows = []
     for ev in events:
         ts_utc_str = ev.ts_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -42,17 +43,17 @@ def insert_events(conn: sqlite3.Connection, evidence_id: int, events: List[Event
             ev.host, ev.source_type, ev.event_type, ev.severity, ev.src_ip, ev.username,
             ev.detail, ev.message, ev.raw_line
         ))
-        
+
     conn.executemany(query, rows)
     conn.commit()
 
-def insert_gaps(conn: sqlite3.Connection, evidence_id: int, gaps: List[ParseGap]) -> None:
+def insert_gaps(conn: sqlite3.Connection, evidence_id: int, gaps: list[ParseGap]) -> None:
     if not gaps:
         return
-        
+
     query = "INSERT INTO parse_gaps (evidence_id, line_no, reason, raw_line) VALUES (?, ?, ?, ?)"
     rows = [(evidence_id, g.line_no, g.reason, g.raw_line) for g in gaps]
-    
+
     conn.executemany(query, rows)
     conn.commit()
 
