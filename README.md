@@ -1,2 +1,78 @@
-# AIORI-3-HACKATHON-PROJECTS
-This repository will contain the code and resources for the AIORI-3 hackathon that will be developed during the AIORI-3
+# AIORI PS-013 Incident Timeline & Evidence Collection
+
+This is a lightweight digital-forensics CLI tool for the AIORI hackathon (PS-013). It ingests Linux `auth.log` and Nginx access logs, copies them untouched into a read-only evidence store with SHA-256 hashes and a manifest, parses them into a SQLite database with UTC timestamps, records unparsed lines (parse gaps), and corrects clock skew between hosts.
+
+## Installation
+
+```bash
+python -m venv .venv
+# Activate the virtual environment:
+# Windows: .venv\Scripts\activate
+# Unix/MacOS: source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+## Quick Start
+
+The tool provides a main `forensic` CLI with four core commands:
+
+1. **Ingest**: Collect log files, hash them, and store them securely.
+   ```bash
+   forensic ingest --case /tmp/c --sources /path/to/sources.json --collector gayatri
+   ```
+2. **Verify**: Check the integrity of the evidence store against the manifest.
+   ```bash
+   forensic verify --case /tmp/c
+   ```
+3. **Build**: Parse evidence files into the SQLite database.
+   ```bash
+   forensic build --case /tmp/c
+   ```
+4. **Skew**: Estimate and correct clock skew between hosts.
+   ```bash
+   forensic skew --case /tmp/c --reference web01
+   ```
+   Or manually set an offset:
+   ```bash
+   forensic skew --case /tmp/c --offset db01=-420
+   ```
+   
+There is also a `run-all` command to process multiple scenarios at once.
+
+## Verification
+
+Verification ensures that the collected evidence has not been tampered with:
+1. **Hash at Ingest**: Files are hashed (SHA-256) upon collection and copied to a read-only evidence store (`0o444` permissions).
+2. **Manifest**: A `manifest.json` tracks each file, its original path, size, line count, and SHA-256 hash. A `manifest.sha256` hash of the manifest file itself is also created.
+3. **Verify Command**: The `forensic verify` command checks the manifest's own hash, then verifies that every file listed in the manifest exists, matches its expected hash, and corresponds to exactly one row in the evidence database table with matching details.
+
+## SQLite Database Tables
+
+- `case_meta`: Key-value pairs for case metadata (e.g., case_id, created_at_utc).
+- `evidence`: Registry of collected files and their metadata (hashes, paths).
+- `events`: Parsed log events with normalized UTC timestamps and extracted details.
+- `events_fts`: Full-text search index for the events table.
+- `parse_gaps`: Records lines that could not be parsed and the reason why.
+- `skew_corrections`: Applied clock skew corrections per host.
+
+## Known Limitations
+
+- Syslog year and timezone are operator-declared (via `sources.json` hints or file mtime inference).
+- Clock skew anchor matching assumes the paired events happened within 5 seconds of each other.
+- Daylight Saving Time (DST) fold ambiguity is not automatically resolved.
+- Currently supports only two log formats: `auth.log` (syslog) and `nginx` access logs.
+- This tool is a prototype and is not forensically certified.
+- Does not include capabilities for live endpoint takeover or malware removal.
+
+## Project Layout
+
+- `src/forensic/`: Core Python package.
+  - `models.py`, `schema.sql`: Shared data models and database schema.
+  - `ingest.py`, `build.py`, `skew.py`, `normalize.py`: Core processing logic.
+  - `parsers/`: Log format parsers (`auth_log.py`, `nginx.py`).
+  - `cli.py`, `cli_evidence.py`: Typer CLI applications.
+- `tests/`: Pytest suite and fixtures.
+- `docs/`: Documentation (including implementation guides).
+- `cases/`: Generated case output directories (git-ignored).
+- `scenarios/`: Example input scenarios for testing (handled by Person B).
