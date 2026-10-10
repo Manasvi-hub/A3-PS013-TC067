@@ -4,6 +4,7 @@ import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from . import db
 
@@ -142,74 +143,136 @@ def ingest(case_dir: Path, sources_json: Path, collector: str) -> None:
     conn.close()
 
 
-def verify(case_dir: Path) -> bool:
+def verify_items(case_dir: Path) -> list[dict[str, Any]]:
+    """Return list of dicts: {"file": str, "status": "OK"|"TAMPERED"|"MISSING"|"MISMATCH", "expected": str, "actual": str}."""
     manifest_path = case_dir / "manifest.json"
     manifest_h_path = case_dir / "manifest.sha256"
 
+    results: list[dict[str, Any]] = []
+
     if not manifest_path.exists() or not manifest_h_path.exists():
-        print("MISSING manifest.json or manifest.sha256")
-        return False
+        results.append({
+            "file": "manifest.json",
+            "status": "MISSING",
+            "expected": "",
+            "actual": "",
+        })
+        return results
 
     with open(manifest_h_path, "r", encoding="utf-8") as f:
         expected_manifest_h = f.read().strip()
 
     actual_manifest_h = sha256_chunked(manifest_path)
     if actual_manifest_h != expected_manifest_h:
-        print(
-            f"TAMPERED manifest.json expected={expected_manifest_h} actual={actual_manifest_h}"
-        )
-        return False
+        results.append({
+            "file": "manifest.json",
+            "status": "TAMPERED",
+            "expected": expected_manifest_h,
+            "actual": actual_manifest_h,
+        })
+        return results
+
+    results.append({
+        "file": "manifest.json",
+        "status": "OK",
+        "expected": expected_manifest_h,
+        "actual": actual_manifest_h,
+    })
 
     with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
     conn = db.connect(case_dir)
     try:
-        # Count mismatch check
-        manifest_count = len(manifest.get("items", []))
+        manifest_items = manifest.get("items", [])
+        manifest_count = len(manifest_items)
         db_count = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
-        if manifest_count != db_count:
-            print(
-                f"MISMATCH manifest lists {manifest_count} items but DB has {db_count} evidence rows"
-            )
-            return False
 
-        all_ok = True
-        for item in manifest["items"]:
+        if manifest_count != db_count:
+            results.append({
+                "file": "evidence rows",
+                "status": "MISMATCH",
+                "expected": str(manifest_count),
+                "actual": str(db_count),
+            })
+
+        for item in manifest_items:
             stored_path = case_dir / item["stored_path"]
+            expected_h = item["sha256"]
+
             if not stored_path.exists():
-                print(f"MISSING {item['stored_path']}")
-                all_ok = False
+                results.append({
+                    "file": item["stored_path"],
+                    "status": "MISSING",
+                    "expected": expected_h,
+                    "actual": "",
+                })
                 continue
 
             actual_h = sha256_chunked(stored_path)
-            expected_h = item["sha256"]
-
             if actual_h != expected_h:
-                print(
-                    f"TAMPERED {item['stored_path']} expected={expected_h} actual={actual_h}"
-                )
-                all_ok = False
+                results.append({
+                    "file": item["stored_path"],
+                    "status": "TAMPERED",
+                    "expected": expected_h,
+                    "actual": actual_h,
+                })
                 continue
 
             row = conn.execute(
                 "SELECT sha256 FROM evidence WHERE id = ?", (item["id"],)
             ).fetchone()
             if not row:
-                print(f"MISSING DB row for evidence id {item['id']}")
-                all_ok = False
+                results.append({
+                    "file": item["stored_path"],
+                    "status": "MISSING",
+                    "expected": expected_h,
+                    "actual": "",
+                })
                 continue
 
             if row["sha256"] != expected_h:
-                print(
-                    f"TAMPERED DB row for evidence id {item['id']} "
-                    f"expected={expected_h} actual={row['sha256']}"
-                )
-                all_ok = False
+                results.append({
+                    "file": item["stored_path"],
+                    "status": "TAMPERED",
+                    "expected": expected_h,
+                    "actual": row["sha256"],
+                })
                 continue
 
-            print(f"OK {item['stored_path']}")
+            results.append({
+                "file": item["stored_path"],
+                "status": "OK",
+                "expected": expected_h,
+                "actual": actual_h,
+            })
 
-        return all_ok
+        return results
     finally:
         conn.close()
+
+
+def verify(case_dir: Path) -> bool:
+    items = verify_items(case_dir)
+    if not items:
+        return False
+
+    all_ok = True
+    for item in items:
+        status = item["status"]
+        f = item["file"]
+        if status == "OK":
+            print(f"OK {f}")
+        elif status == "TAMPERED":
+            print(f"TAMPERED {f} expected={item['expected']} actual={item['actual']}")
+            all_ok = False
+        elif status == "MISSING":
+            print(f"MISSING {f}")
+            all_ok = False
+        elif status == "MISMATCH":
+            print(f"MISMATCH {f} expected={item['expected']} actual={item['actual']}")
+            all_ok = False
+        else:
+            all_ok = False
+
+    return all_ok
