@@ -3,10 +3,10 @@ from pathlib import Path
 
 import typer
 
-evidence_app = typer.Typer()
+app = typer.Typer()
 
 
-@evidence_app.command()
+@app.command()
 def ingest(
     case: Path = typer.Option(..., help="Case directory"),
     sources: Path = typer.Option(..., help="Path to sources.json"),
@@ -18,7 +18,7 @@ def ingest(
     typer.echo("Ingest complete.")
 
 
-@evidence_app.command()
+@app.command()
 def verify(case: Path = typer.Option(..., help="Case directory")):
     """Verify evidence integrity."""
     from .ingest import verify as do_verify
@@ -28,14 +28,14 @@ def verify(case: Path = typer.Option(..., help="Case directory")):
         sys.exit(1)
 
 
-@evidence_app.command()
+@app.command()
 def build(case: Path = typer.Option(..., help="Case directory")):
     """Build the database from evidence."""
     from .build import build as do_build
     do_build(case)
 
 
-@evidence_app.command()
+@app.command()
 def skew(
     case: Path = typer.Option(..., help="Case directory"),
     reference: str | None = typer.Option(None, help="Reference host name"),
