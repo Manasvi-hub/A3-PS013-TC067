@@ -38,10 +38,21 @@ def main():
         if cond in overall:
             overall[cond].append(sec)
             
+    # Check which known scenarios have data
+    known_scenarios = sorted([
+        d.name for d in Path("scenarios").iterdir()
+        if d.is_dir() and (d / "sources.json").exists()
+    ]) if Path("scenarios").exists() else sorted(list(set(k[0] for k in stats.keys())))
+    
+    scenarios_with_data = set(k[0] for k in stats.keys())
+    missing_scenarios = [s for s in known_scenarios if s not in scenarios_with_data]
+    for ms in missing_scenarios:
+        print(f"No data for scenario: {ms}")
+
     out_lines = ["# Triage Evaluation Summary\n"]
     
     # Per scenario table
-    scenarios = sorted(list(set(k[0] for k in stats.keys())))
+    scenarios = sorted(list(scenarios_with_data))
     out_lines.append("## Results by Scenario\n")
     out_lines.append("| Scenario | Condition | Median (s) | Total (s) | Accuracy |")
     out_lines.append("|---|---|---|---|---|")
@@ -51,11 +62,14 @@ def main():
             k = (scen, cond)
             if k in stats:
                 times = [x["seconds"] for x in stats[k]]
-                med = statistics.median(times)
+                med = statistics.median(times) if times else 0
                 tot = sum(times)
                 corr = sum(1 for x in stats[k] if x["correct"])
-                acc = (corr / len(times)) * 100
+                acc = (corr / len(times) * 100) if times else 0
                 out_lines.append(f"| {scen} | {cond} | {med:.1f} | {tot:.1f} | {acc:.1f}% |")
+
+    if missing_scenarios:
+        out_lines.append(f"\n*Note: No triage data yet for: {', '.join(missing_scenarios)}*")
                 
     out_lines.append("\n## Overall Performance\n")
     med_man = statistics.median(overall["manual"]) if overall["manual"] else 0
