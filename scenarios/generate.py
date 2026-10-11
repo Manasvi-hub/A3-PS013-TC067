@@ -163,9 +163,9 @@ def generate_s2():
             {"id": "S2-06", "ts_utc": "2026-10-05T14:27:40Z", "host": "web01", "event_type": "web_scan", "match": {"src_ip": "203.0.113.77"}, "description": "Last attacker request"}
         ],
         "triage_questions": [
-            {"q": "When did the attacker first successfully log in (UTC)?", "answer": "N/A"},
+            {"q": "When did the attacker first attempt SQL injection (UTC)?", "answer": "2026-10-05T14:09:33Z"},
             {"q": "Which source IP?", "answer": "203.0.113.77"},
-            {"q": "What was the first privileged command run?", "answer": "N/A"}
+            {"q": "When was the webshell uploaded (UTC)?", "answer": "2026-10-05T14:18:47Z"}
         ],
         "expected_parse_gaps": 5,
         "expected_skew": {}

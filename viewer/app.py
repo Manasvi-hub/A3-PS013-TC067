@@ -73,8 +73,16 @@ events = load_events(conn, filters_dataclass, limit)
 st.title(f"Case Viewer: {case_dir.name}")
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Events", stats["total_events"])
-col2.metric("First Time", stats["first_event"])
-col3.metric("Last Time", stats["last_event"])
+first = stats.get("first_event") or ""
+last = stats.get("last_event") or ""
+with col2:
+    st.metric("First event (UTC)", first[11:19] if len(first) >= 19 else first)
+    if len(first) >= 10:
+        st.caption(first[:10])
+with col3:
+    st.metric("Last event (UTC)", last[11:19] if len(last) >= 19 else last)
+    if len(last) >= 10:
+        st.caption(last[:10])
 col4.metric("Gaps", stats["total_gaps"])
 col5.metric("Skew corrections", len(skew_summary(conn)))
 
@@ -89,13 +97,18 @@ with tab1:
         
         # Altair chart
         df_chart = df.copy()
-        df_chart['minute'] = pd.to_datetime(df_chart[ts_col]).dt.floor('min')
+        dt_min = pd.to_datetime(df_chart[ts_col], utc=True).dt.floor('min')
+        df_chart['minute'] = dt_min.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
         grouped = df_chart.groupby(['minute', 'host']).size().reset_index(name='count')
         chart = alt.Chart(grouped).mark_bar().encode(
-            x='minute:T',
+            x=alt.X('utcyearmonthdatehoursminutes(minute):T', title='Time (UTC)', axis=alt.Axis(format='%H:%M')),
             y='count:Q',
             color='host:N',
-            tooltip=['minute:T', 'host:N', 'count:Q']
+            tooltip=[
+                alt.Tooltip('utcyearmonthdatehoursminutes(minute):T', title='minute (UTC)'),
+                'host:N',
+                'count:Q'
+            ]
         ).properties(height=200)
         st.altair_chart(chart, width="stretch")
         
