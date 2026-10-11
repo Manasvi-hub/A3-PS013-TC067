@@ -1,11 +1,11 @@
-# PS-013 Incident Timeline & Evidence Collection: Implementation Guide (Person B)
+# PS-013 Incident Timeline & Evidence Collection: Unified Implementation Guide & Plan
 
-> **Your role:** Scenarios, timeline queries, Streamlit viewer, report export, evaluation, PDF deck and demo.
-> **Window:** Wed 7 Oct 2026 to Wed 14 Oct 2026 (submission). Target: feature-complete by Mon 12, frozen Tue 13, Wed 14 is buffer only.
-> **Section 0 to 6 are identical in both people's files (the contract). Do not change them without a PR labelled `contract` that both of you approve.**
+> **Authors:** Gayatri Sanjay Karanjkar (Person A) & Manasvi Manoj Yeole (Person B)
+> **Team:** A3-PS013-TC067
+> **Window:** Wed 7 Oct 2026 to Wed 14 Oct 2026 (submission).
+> **Scope:** Unified end-to-end plan covering evidence core, parsing, normalization, clock skew, scenarios, timeline query layer, Streamlit viewer, reporting, evaluation, and delivery.
 
 ---
-
 ## 0. What we are building (one paragraph)
 
 A lightweight, zero-infrastructure forensic tool for small teams. It ingests raw Linux `auth.log` and Nginx access logs, copies them untouched into an evidence store, hashes them (SHA-256) at collection, parses them into **normalized copies** in SQLite (with UTC timestamps, clock-skew correction, and full-text search), records every line it could not parse, and presents a searchable chronological timeline in a Streamlit viewer plus an exportable incident report. We evaluate it on **3 synthetic scenarios** and compare **triage time against a manual `grep` baseline**.
@@ -328,6 +328,228 @@ Paths are relative to the `sources.json` file. `declared_tz` is what the *operat
 | **Mon 12** | Support evaluation; fix issues; final tests | Triage experiment; parsing-gap analysis; PDF finalised | Agree on numbers |
 | **Tue 13** | Freeze; repo cleanup; tag | Demo rehearsal x2; pseudocode; upload PDF | Verify collaborator + ownership |
 | **Wed 14** | Buffer | Buffer | Submit |
+
+---
+
+---
+
+# PART II: PERSON A TASKS (Evidence & Parsing Core)
+
+You own: `models.py`, `schema.sql`, `db.py`, `ingest.py`, `parsers/`, `normalize.py`, `skew.py`, `build.py`, `cli_evidence.py`, and tests `test_ingest/parsers/normalize/skew`.
+
+**You do not depend on B's logs to start.** Write small hand-made samples in `tests/fixtures/` (10 to 20 lines each, include deliberately broken lines). Swap to B's scenario logs on Thu midday.
+
+## A0. Day-1 bootstrap (Wed 7, first 60 minutes, unblocks B)
+
+1. Create `pyproject.toml`, package skeleton, `.gitignore`, `requirements.txt`, `.github/CODEOWNERS`.
+2. Commit `models.py` (section 4 exactly), `schema.sql` (section 3 exactly), `db.py`, and `cli.py` with empty Typer sub-apps.
+3. Open PR `a/bootstrap`, B reviews and merges within the hour.
+
+`db.py` must expose:
+```python
+def connect(case_dir: Path) -> sqlite3.Connection        # row_factory = sqlite3.Row, foreign keys on
+def init_schema(conn) -> None                            # executes schema.sql
+def insert_evidence(conn, **fields) -> int
+def insert_events(conn, evidence_id: int, events: list[Event]) -> None
+def insert_gaps(conn, evidence_id: int, gaps: list[ParseGap]) -> None
+def rebuild_fts(conn) -> None
+```
+
+## A1. Ingest and hashing (`ingest.py`)
+
+**Pseudocode**
+```
+ingest(case_dir, sources_json, collector):
+    spec = load(sources_json)
+    make case_dir/evidence, init DB, write case_meta
+    for src in spec.sources:
+        data_path = resolve(sources_json.parent, src.path)
+        h = sha256_chunked(data_path)                 # hash BEFORE copying anything else
+        if h exists in evidence table: log "duplicate, skipped"; continue
+        dest = case_dir/evidence/f"{host}__{basename}"   # avoid name clashes between hosts
+        copy_bytes(data_path, dest)
+        assert sha256_chunked(dest) == h              # verify the copy
+        chmod(dest, 0o444)
+        count lines
+        insert evidence row (collected_at_utc = now UTC, collector, host, source_type, declared_tz)
+    write manifest.json
+```
+`manifest.json`:
+```json
+{
+  "case_id": "s1", "tool_version": "0.1.0", "created_at_utc": "...", "collector": "alice",
+  "hash_algorithm": "SHA-256",
+  "items": [{"id": 1, "filename": "auth.log", "stored_path": "evidence/web01__auth.log",
+             "sha256": "...", "size_bytes": 10234, "line_count": 120,
+             "collected_at_utc": "...", "host": "web01"}]
+}
+```
+Also store a **manifest self-hash** (`manifest.sha256` next to it) so the manifest itself is tamper-evident.
+
+**Done when:** re-running ingest skips duplicates; stored files are read-only; manifest lists every file.
+
+## A2. `verify` (`ingest.py`)
+
+For each item: re-hash the stored file, compare with both `manifest.json` and the DB row; also check the manifest against `manifest.sha256`. Output `OK`/`TAMPERED`/`MISSING`. Exit code 1 on any failure.
+**Test:** copy a case, flip one byte with `chmod u+w` + edit, run verify, expect `TAMPERED` and exit 1.
+
+## A3. auth.log parser (`parsers/auth_log.py`)
+
+Syslog line format: `Oct  3 02:14:07 web01 sshd[1234]: Failed password for invalid user admin from 203.0.113.50 port 51122 ssh2`
+
+Base regex:
+```python
+SYSLOG = re.compile(
+  r'^(?P<ts>[A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<proc>[\w\-/\.]+)(?:\[(?P<pid>\d+)\])?:\s+(?P<msg>.*)$')
+```
+Message patterns (named groups `user`, `ip`, `cmd`):
+| Pattern | event_type |
+|---|---|
+| `Failed (password|publickey) for (invalid user )?(?P<user>\S+) from (?P<ip>\S+) port \d+` | `ssh_failed_login` (or `ssh_invalid_user` when "invalid user") |
+| `Invalid user (?P<user>\S+) from (?P<ip>\S+)` | `ssh_invalid_user` |
+| `Accepted (password|publickey) for (?P<user>\S+) from (?P<ip>\S+) port` | `ssh_accepted_login` |
+| `pam_unix\(.*:session\): session opened for user (?P<user>\S+)` | `session_opened` |
+| `session closed for user` | `session_closed` |
+| `(?P<user>\S+) : .*COMMAND=(?P<cmd>.*)$` (proc = sudo) | `sudo_command` (severity high if cmd matches `/bin/(ba)?sh|su -|shadow|useradd|passwd`) |
+| `new user: name=(?P<user>\S+)` | `user_added` |
+| `Disconnected from|Connection closed by` | `ssh_disconnect` |
+
+If the syslog header matches but the message matches no pattern, return an `Event` with `event_type="syslog_other"`, severity info (not a gap: the line was understood structurally). If the header itself fails, return `ParseGap("no_regex_match")`. If the header matches but the timestamp is invalid (e.g. `Feb 30`), return `ParseGap("bad_timestamp")`.
+
+**Done when:** every valid S1 line parses; fixtures with garbage lines yield correct gap reasons.
+
+## A4. Nginx parser (`parsers/nginx.py`)
+
+Combined log format:
+`203.0.113.50 - - [03/Oct/2026:02:30:11 +0000] "GET /index.php?id=1%27%20UNION%20SELECT%201,2 HTTP/1.1" 200 512 "-" "sqlmap/1.7"`
+```python
+NGINX = re.compile(
+  r'^(?P<ip>\S+) \S+ (?P<user>\S+) \[(?P<ts>\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4})\] '
+  r'"(?P<method>[A-Z]+) (?P<path>\S+) (?P<proto>[^"]+)" (?P<status>\d{3}) (?P<size>\S+) '
+  r'"(?P<ref>[^"]*)" "(?P<ua>[^"]*)"$')
+```
+- Parse ts with `datetime.strptime(ts, "%d/%b/%Y:%H:%M:%S %z")` and convert to UTC. The line's offset wins over `declared_tz`.
+- URL-decode the path (`urllib.parse.unquote`, applied twice for double encoding) before classification.
+- Classification order (first match wins): `web_webshell_access` (known shell names or `cmd=`/`exec=` params), `web_webshell_upload` (POST/PUT with `.php`/`.jsp` filename or `upload` path and 2xx), `web_sqli_attempt`, `web_path_traversal`, `web_scan` (scanner UA like nikto/sqlmap/masscan/gobuster, or probe paths), else `web_request`.
+- Fill `detail` with `METHOD path status`. `message` e.g. `GET /index.php?id=1' UNION SELECT 1,2 -> 200`.
+- Truncated line (ends mid-quote): `ParseGap("truncated")`.
+
+**Done when:** all S2 lines parse; classification test table covers each event type.
+
+## A5. Normalization (`normalize.py`)
+
+```python
+def syslog_to_utc(ts_str: str, ctx: ParseContext, prev_dt: datetime | None) -> datetime
+```
+Algorithm:
+1. Parse `"Oct  3 02:14:07"` with `year = ctx.year_hint`; interpret in `ZoneInfo(ctx.declared_tz)`; convert to UTC.
+2. **Year rollover:** syslog lines are chronological per file. If the new month is less than the previous line's month by more than 6 (Dec to Jan), increment the year for the rest of the file. If `year_hint` is not given, infer from `file_mtime_utc`: use the mtime year, and if a parsed date lands more than 30 days in the future of mtime, subtract one year.
+3. Handle DST ambiguity: use `fold=0` and record in a note (documented limitation).
+4. Always keep the original string in `ts_original`.
+5. Output `ts_utc` as an ISO string with `Z`.
+
+**Tests:** same instant from IST syslog `02:14:07` and a `+0000` nginx line at `20:44:07Z` (previous day) give identical `ts_utc`; Dec 31 to Jan 1 rollover; Feb 29 in a leap year.
+
+## A6. Parsing gaps
+
+`build.py` collects every `ParseGap`, writes to `parse_gaps`, and returns stats:
+```python
+{"evidence_id": 1, "total_lines": 120, "parsed": 114, "gaps": 6, "parsed_pct": 95.0,
+ "gap_reasons": {"no_regex_match": 4, "bad_timestamp": 1, "truncated": 1}}
+```
+Blank lines count as gaps with reason `empty_line`, but the report shows them separately so they do not inflate failure rates. Files with invalid UTF-8: read with `errors="replace"`, mark affected lines `encoding_error` as gaps. Print the stats table at the end of `forensic build`.
+
+## A7. Skew estimation (`skew.py`)
+
+**Concept:** if two hosts record the *same real-world event* (one actor action seen on both), the difference in their timestamps is the clock offset.
+
+**Anchor definition:** pair events from two different hosts that share the same key `(src_ip, event_type, detail_key)` where `detail_key` is the request path for web events and the username for ssh events, and whose raw difference is within `window` (default 30 minutes, to allow for large offsets). Assumption: true gap between the paired events is under `max_true_gap` (default 5 s). This is a **documented assumption**, not ground truth.
+
+**Pseudocode**
+```
+estimate_skew(conn, reference_host, window=1800, min_anchors=3):
+    for host in hosts - {reference_host}:
+        anchors = []
+        for ev_h in events(host) where key is anchor-eligible:
+            candidates = events(reference_host) with same key and |ts diff| <= window
+            pick nearest by absolute time; require one-to-one pairing
+            anchors.append(ref.ts_utc - ev_h.ts_utc)        # seconds to ADD to host
+        if len(anchors) >= min_anchors:
+            offset = median(anchors); stdev = pstdev(anchors)
+            confidence = "high" if stdev < 2 and n >= 5 else "medium" if stdev < 10 else "low"
+            note = f"{n} anchors, median {offset:.1f}s, stdev {stdev:.1f}s ({confidence}). Assumes paired events < {max_true_gap}s apart."
+        else:
+            offset = 0; method = "none"; note = "insufficient anchors; no correction applied. Use --offset to set manually."
+        write skew_corrections row
+        UPDATE events SET skew_offset_s=offset, ts_utc_corrected = ts_utc + offset WHERE host=host
+```
+Manual override: `--offset db01=-420` writes `method='manual'`, `anchor_count=0`, confidence note "operator supplied".
+**Never overwrite** `ts_utc` or `ts_original`; only the corrected columns change.
+
+**Done when:** on S3, after `forensic skew`, db01 events land within 5 s of the true times in `ground_truth.json`, and before correction they do not.
+
+## A8. Tests (`tests/`)
+
+| File | Must cover |
+|---|---|
+| `test_ingest.py` | hash correctness vs `sha256sum`, duplicate skip, read-only mode, manifest content, verify OK, verify detects 1-byte tamper, missing file |
+| `test_parsers.py` | each auth pattern, each nginx event type, each gap reason, URL-decode (double-encoded SQLi) |
+| `test_normalize.py` | tz conversion, rollover, leap day, invalid date |
+| `test_skew.py` | recovers a synthetic +420 s offset, handles insufficient anchors, manual override, does not touch `ts_original` |
+
+Run: `pytest -q`. Target: green before every PR.
+
+## A9. `build.py` orchestration
+
+```
+build(case_dir):
+    conn = connect(case_dir); DELETE FROM events, parse_gaps, skew_corrections; (evidence stays)
+    for ev in evidence rows:
+        parser = REGISTRY[ev.source_type]
+        ctx = ParseContext(host, source_type, declared_tz, year_hint, mtime)
+        for line_no, byte_offset, line in iterate_with_offsets(stored_path):   # read bytes, keep offsets
+            result = parser.parse_line(...)
+            Event -> events list, ParseGap -> gaps list
+        insert; stats
+    rebuild_fts(conn)
+    print summary table
+```
+Read from the **stored evidence copy**, never from the original source path.
+
+## A10. README (Sun/Mon)
+
+Quick start (5 commands), architecture diagram reference, how verification works, known limitations (syslog year/tz are operator-declared, skew assumes simultaneity of anchors, DST fold ambiguity, only two formats).
+
+## A11. Your day-by-day
+
+| Day | Tasks | Exit criterion |
+|---|---|---|
+| **Wed 7** | A0 (bootstrap PR within 1 hour), then A1 | Contract files on `main`; ingest copies+hashes a fixture |
+| **Thu 8** | Finish A1, A2; start A3 using B's S1 log (arrives midday) | `ingest` + `verify` pass tests on S1 |
+| **Fri 9** | A3, A4, A5, A6, A9 | **Checkpoint 1:** `ingest -> build` on S1 and S2 fills the DB; B can query it |
+| **Sat 10** | A7, A8 | S3 correlates correctly after `skew`; pytest green |
+| **Sun 11** | Fix gaps B finds, edge cases, README, `run-all` with B | **Checkpoint 2:** all 3 scenarios e2e on `main` |
+| **Mon 12** | Help with triage runs (be the second tester), fix defects, extend tests | No open P1 bugs |
+| **Tue 13** | Freeze at 18:00, tag `v1.0-submission`, final `pytest`, check repo hygiene and ownership transfer | Tag pushed |
+| **Wed 14** | Buffer | Submit |
+
+## A12. Handoffs
+
+- **To B (Wed 7):** contract files. **To B (Fri 9):** a working `forensic build` so B can stop using the seeded fake DB.
+- **From B (Thu midday):** scenario logs + `sources.json` + `ground_truth.json`. If not delivered, use your fixtures.
+- **For the pseudocode snippet (Tue):** give B the final shape of hash, normalize, skew flow (A1, A5, A7 pseudocode above, trimmed to about 25 lines).
+
+## A13. Cut order if time runs out
+
+Skew auto-detection edge cases, then DST handling, then extra auth patterns. **Never cut:** hashing, `verify`, original vs normalized separation, parse gaps, basic skew (manual `--offset` fallback is acceptable).
+
+## A14. Definition of done (A)
+
+- [ ] `ingest`, `verify`, `build`, `skew` work on all 3 scenarios
+- [ ] Originals read-only, hashes in DB + manifest, tamper detected
+- [ ] Both parsers pass classification tests; gaps recorded with reasons
+- [ ] Skew corrected in S3 with confidence note
+- [ ] `pytest` green; README written; tag `v1.0-submission` pushed
 
 ---
 
