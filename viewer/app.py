@@ -27,12 +27,12 @@ if not db_path.exists():
     st.stop()
 
 @st.cache_resource
-def get_conn():
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+def get_conn(db_path_str: str):
+    conn = sqlite3.connect(db_path_str, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
-conn = get_conn()
+conn = get_conn(str(db_path))
 
 # Basic info
 stats = summary_stats(conn)
@@ -97,7 +97,7 @@ with tab1:
             color='host:N',
             tooltip=['minute:T', 'host:N', 'count:Q']
         ).properties(height=200)
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width="stretch")
         
         st.dataframe(df[[ts_col, "ts_original", "host", "event_type", "severity", "src_ip", "username", "message"]])
 

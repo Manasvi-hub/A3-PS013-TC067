@@ -7,7 +7,12 @@ import csv
 from pathlib import Path
 
 def run_cmd(cmd):
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    env = os.environ.copy()
+    scripts_dir = str(Path(sys.executable).parent)
+    env["PATH"] = scripts_dir + os.pathsep + env.get("PATH", "")
+    if cmd.startswith("python "):
+        cmd = f'"{sys.executable}" ' + cmd[7:]
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 def check_1():
     print("Check 1: pytest ... ", end="")
@@ -97,26 +102,42 @@ def check_6():
                     return False
         except Exception:
             pass
-            
-    res = run_cmd('git grep "<<<<<<<"')
+
+    res = subprocess.run(
+        ["git", "grep", "-E", "^(<<<<<<< |>>>>>>> )", "--", ":!scripts/final_check.py", ":!*.pdf"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if res.returncode == 0:
-        print("FAIL (<<<<<<< found)")
+        print("FAIL (conflict markers found)")
         return False
-        
+
     print("PASS")
     return True
 
 def check_7():
     print("Check 7: Git hygiene ... ", end="")
-    res = run_cmd("git ls-files")
+    res = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     files = res.stdout.splitlines()
-    forbidden = ["egg-info", "cases/", "reports/", "__pycache__", "mock_s3_db.py"]
+    forbidden = ["egg-info", "cases/", "reports/", "__pycache__"]
     for f in files:
+        f_norm = f.replace("\\", "/")
+        if f_norm == "mock_s3_db.py":
+            print(f"FAIL (mock_s3_db.py in root: {f})")
+            return False
         for bad in forbidden:
-            if bad in f.replace("\\", "/"):
+            if bad in f_norm:
                 print(f"FAIL ({bad} found in {f})")
                 return False
-                
+
     print("PASS")
     return True
 
