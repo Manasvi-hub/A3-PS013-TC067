@@ -763,7 +763,7 @@ Use the AIORI Beamer template in `Proposed-structure-hackathon.pdf` (LaTeX, Over
 | Deployment timeline | The 7 to 14 Oct plan, trimmed |
 | Bibliography | Real references only (replace Einstein/cows placeholders) |
 
-Draw diagrams in draw.io or Mermaid, export PNG. Final file: `docs/<TeamName>-PS013.pdf`, also linked from README. Start slides 1 to 4 on Wed 7 while A bootstraps.
+Draw diagrams in draw.io or Mermaid, export PNG. Final file: `A3-PS013-TC067.pdf` (in repository root), also linked from README. Start slides 1 to 4 on Wed 7 while A bootstraps.
 
 ## B9. Demo script and pseudocode (`docs/demo_script.md`, `docs/pseudocode.md`)
 
