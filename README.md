@@ -71,11 +71,16 @@ Verification ensures that the collected evidence has not been tampered with:
   - `models.py`, `schema.sql`: Shared data models and database schema.
   - `ingest.py`, `build.py`, `skew.py`, `normalize.py`: Core processing logic.
   - `parsers/`: Log format parsers (`auth_log.py`, `nginx.py`).
-  - `cli.py`, `cli_evidence.py`: Typer CLI applications.
-- `tests/`: Pytest suite and fixtures.
-- `docs/`: Documentation (including implementation guides).
+  - `timeline.py`, `report.py`, `pipeline.py`: Timeline queries, HTML/JSON reports, end-to-end pipeline.
+  - `cli.py`, `cli_evidence.py`, `cli_analysis.py`: Typer CLI applications.
+- `viewer/`: Interactive Streamlit application (`viewer/app.py`).
+- `tests/`: Pytest suite (33 tests) and test fixtures.
+- `evaluation/`: Triage timer harness, evaluation results, summary generator, and parsing gap analysis.
+- `docs/`: Unified implementation plan (`IMPLEMENTATION_PLAN.md`), demo script, pseudocode.
+- `scenarios/`: Three synthetic incident scenarios (`s1_ssh_bruteforce`, `s2_web_attack`, `s3_clock_skew`).
+- `scripts/`: Project validation and quality checks (`final_check.py`).
 - `cases/`: Generated case output directories (git-ignored).
-- `scenarios/`: Example input scenarios for testing (handled by Person B).
+- `A3-PS013-TC067.pdf`: Presentation slide deck for AIORI Hackathon.
 
 ## Demo walkthrough
 

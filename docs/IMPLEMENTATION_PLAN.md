@@ -53,6 +53,10 @@ Setup: `python -m venv .venv && source .venv/bin/activate && pip install -r requ
 ├── requirements.txt
 ├── .gitignore                    # cases/, .venv/, __pycache__/
 ├── .github/CODEOWNERS
+├── A3-PS013-TC067.pdf            # Hackathon presentation slide deck
+├── Proposed-structure-hackathon.pdf # AIORI template reference
+├── scripts/
+│   └── final_check.py            # Quality gate & validation test suite
 ├── src/forensic/
 │   ├── __init__.py
 │   ├── models.py                 # [A] Event, ParseGap, ParseContext, SourceSpec dataclasses (section 4)
@@ -66,27 +70,44 @@ Setup: `python -m venv .venv && source .venv/bin/activate && pip install -r requ
 │   ├── normalize.py              # [A] tz to UTC, year inference
 │   ├── skew.py                   # [A] anchor-based offset estimation + apply
 │   ├── build.py                  # [A] orchestrates parse -> normalize -> DB
+│   ├── pipeline.py               # [shared] runs case ingest -> build -> skew -> report
 │   ├── timeline.py               # [B] query layer: filters, FTS search, context window
 │   ├── report.py                 # [B] HTML + JSON export
 │   ├── templates/report.html.j2  # [B]
-│   └── cli.py                    # [shared] A owns ingest/verify/build/skew, B owns search/report/ui
-├── viewer/app.py                 # [B] Streamlit
+│   ├── cli.py                    # [shared] CLI entrypoint
+│   ├── cli_evidence.py           # [A] evidence sub-commands (ingest, verify, build, skew)
+│   └── cli_analysis.py           # [B] analysis sub-commands (search, report, ui, run-all)
+├── viewer/app.py                 # [B] Streamlit web UI
 ├── scenarios/
 │   ├── generate.py               # [B] synthetic log generator (seeded, deterministic)
 │   ├── s1_ssh_bruteforce/        # [B] auth.log, sources.json, ground_truth.json
 │   ├── s2_web_attack/            # [B] access.log, sources.json, ground_truth.json
-│   ├── s3_clock_skew/            # [B] multi-host, sources.json, ground_truth.json
-│   └── fixtures/seed_db.py       # [B] builds a fake case.db from ground_truth (lets B work before A is done)
+│   ├── s3_clock_skew/            # [B] multi-host logs, sources.json, ground_truth.json
+│   └── fixtures/                 # fixtures and mock utilities
 ├── tests/
 │   ├── fixtures/                 # [A] tiny hand-written log samples
 │   ├── test_ingest.py            # [A]
 │   ├── test_parsers.py           # [A]
 │   ├── test_normalize.py         # [A]
 │   ├── test_skew.py              # [A]
+│   ├── test_build.py             # [A]
+│   ├── test_pipeline.py          # [shared]
 │   ├── test_ground_truth.py      # [B] runs full pipeline on each scenario, asserts vs ground truth
-│   └── test_timeline_report.py   # [B]
-├── evaluation/                   # [B] triage_questions.md, triage_results.csv, parsing_gap_analysis.md
-├── docs/                         # [B] architecture + DFD diagrams, deck PDF, demo script, pseudocode.md
+│   ├── test_timeline_report.py   # [B]
+│   ├── test_viewer_imports.py    # [B]
+│   └── test_viewer_smoke.py      # [B]
+├── evaluation/                   # [B] triage timer, results CSV, triage summary, gap analysis
+│   ├── triage_timer.py
+│   ├── triage_questions.md
+│   ├── triage_results.csv
+│   ├── summarize.py
+│   ├── triage_summary.md
+│   ├── gap_report.py
+│   └── parsing_gap_analysis.md
+├── docs/                         # [B] implementation plan, demo script, pseudocode.md
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── demo_script.md
+│   └── pseudocode.md
 └── cases/                        # runtime output, gitignored (cases/<id>/evidence, manifest.json, case.db)
 ```
 
