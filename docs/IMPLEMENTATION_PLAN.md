@@ -53,8 +53,7 @@ Setup: `python -m venv .venv && source .venv/bin/activate && pip install -r requ
 ├── requirements.txt
 ├── .gitignore                    # cases/, .venv/, __pycache__/
 ├── .github/CODEOWNERS
-├── A3-PS013-TC067.pdf            # Hackathon presentation slide deck
-├── Proposed-structure-hackathon.pdf # AIORI template reference
+├── A3-PS013-TC067.pdf           
 ├── scripts/
 │   └── final_check.py            # Quality gate & validation test suite
 ├── src/forensic/
