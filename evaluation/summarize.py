@@ -84,6 +84,7 @@ def main():
     out_lines.append("\n## Limitations")
     out_lines.append("- Sample size (n) is very small.")
     out_lines.append("- Testers are the authors and know the tool well.")
+    out_lines.append("- S2 manual and tool sessions were run by the same tester, so the tool session may benefit from familiarity with the logs.")
     out_lines.append("- Scenario authors had prior knowledge of the events.")
     out_lines.append("- Synthetic data might not perfectly replicate real-world complexity.")
     
