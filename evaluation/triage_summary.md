@@ -20,5 +20,6 @@
 ## Limitations
 - Sample size (n) is very small.
 - Testers are the authors and know the tool well.
+- S2 manual and tool sessions were run by the same tester, so the tool session may benefit from familiarity with the logs.
 - Scenario authors had prior knowledge of the events.
 - Synthetic data might not perfectly replicate real-world complexity.
