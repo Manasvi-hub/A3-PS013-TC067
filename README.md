@@ -97,7 +97,7 @@ Tested against 3 synthetic incidents with ground truth:
 - **Ground Truth Validation**: 18 of 18 attack progression steps matched within 1.5 seconds across all 3 scenarios (`tests/test_ground_truth.py`).
 - **Clock Skew Resolution**: In S3, `db01` offset was estimated at -421.5 s (true offset: -420 s) with 10 anchor pairs and standard deviation 0.9 s (high confidence), restoring true causal ordering between `web01` webshell upload and `db01` pivot.
 - **Parsing Gap Transparency**: Zero silent drops. Identified 4 gaps in S1, 5 in S2, and 0 in S3; documented in [evaluation/parsing_gap_analysis.md](evaluation/parsing_gap_analysis.md).
-- **Triage Performance vs Manual Baseline**: Timed human triage sessions showed a 3.1x overall speedup using the tool vs raw `grep`/`less`/`sort` (see [evaluation/triage_summary.md](evaluation/triage_summary.md)). Manual triage failed under clock skew, whereas the tool maintained 100% accuracy.
+- **Triage Performance vs Manual Baseline**: In our small sample (6 timed sessions, testers who know the tool), the tool gave a 3.1x overall speedup (median 11.2 s vs 34.8 s) versus raw `grep`/`less`/`sort`, and the manual S3 session gave a wrong first-login time under the 7-minute clock skew while all tool answers were correct. These are indicative results only; see [evaluation/triage_summary.md](evaluation/triage_summary.md) for the data and limitations.
 - **Cryptographic Evidence Integrity**: SHA-256 manifest and read-only preservation; tampering of even a single byte in stored evidence is immediately detected and flagged.
 
 ---
