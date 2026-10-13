@@ -113,52 +113,7 @@ Tested against 3 synthetic incidents with ground truth:
 
 ---
 
-## Project Layout
 
-```text
-├── README.md
-├── pyproject.toml                # Package definition, console script: forensic = forensic.cli:app
-├── requirements.txt
-├── .gitignore                    # cases/, .venv/, __pycache__/
-├── .github/CODEOWNERS
-├── A3-PS013-TC067.pdf            # Hackathon presentation slide deck
-├── Proposed-structure-hackathon.pdf # AIORI hackathon template reference
-├── scripts/
-│   └── final_check.py            # Quality gate & validation test suite
-├── src/forensic/
-│   ├── __init__.py
-│   ├── models.py                 # Dataclasses: Event, ParseGap, ParseContext, SourceSpec
-│   ├── db.py                     # SQLite connection, schema loader, and insert helpers
-│   ├── schema.sql                # SQLite schema definition and FTS5 tables
-│   ├── ingest.py                 # Evidence copying, hashing, manifest generation, and verification
-│   ├── parsers/                  # Parsers for auth_log (syslog) and nginx combined log
-│   ├── normalize.py              # Timezone normalization to UTC and year inference
-│   ├── skew.py                   # Anchor-based clock skew estimation and correction
-│   ├── build.py                  # Orchestrates parse -> normalize -> SQLite load
-│   ├── pipeline.py               # End-to-end case pipeline runner
-│   ├── timeline.py               # Query layer: filters, FTS search, context window
-│   ├── report.py                 # HTML, JSON, and CSV report exporter
-│   ├── templates/report.html.j2  # Jinja2 report template
-│   ├── cli.py                    # Main Typer CLI entrypoint
-│   ├── cli_evidence.py           # Evidence sub-commands (ingest, verify, build, skew)
-│   └── cli_analysis.py           # Analysis sub-commands (search, report, ui, run-all)
-├── viewer/
-│   └── app.py                    # Streamlit interactive forensic dashboard
-├── scenarios/
-│   ├── generate.py               # Deterministic scenario generator
-│   ├── s1_ssh_bruteforce/        # Scenario 1 logs, sources.json, ground_truth.json
-│   ├── s2_web_attack/            # Scenario 2 logs, sources.json, ground_truth.json
-│   ├── s3_clock_skew/            # Scenario 3 multi-host logs, sources.json, ground_truth.json
-│   └── fixtures/                 # Seed utilities and mocks
-├── tests/                        # 33 unit and integration tests (pytest)
-├── evaluation/                   # Triage timer harness, results CSV, and summary generator
-└── docs/
-    ├── IMPLEMENTATION_PLAN.md    # Unified end-to-end implementation plan
-    ├── demo_script.md            # 5-minute mentor demo walkthrough script
-    └── pseudocode.md             # Core algorithmic flow
-```
-
----
 
 ## Known Limitations & Out of Scope
 
