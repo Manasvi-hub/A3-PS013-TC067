@@ -131,7 +131,6 @@ Tested against 3 synthetic incidents with ground truth:
 
 - [x] [Demo Video](https://youtu.be/8hDyV-rBxMk): 5-minute video walkthrough / demonstration (`https://youtu.be/8hDyV-rBxMk`)
 - [x] [docs/pseudocode.md](docs/pseudocode.md): Core algorithm pseudocode snippet
-- [x] [docs/demo_script.md](docs/demo_script.md): Rehearsed 5-minute demo script
 - [x] [A3-PS013-TC067.pdf](A3-PS013-TC067.pdf): Final presentation slide deck
 - [x] [evaluation/triage_summary.md](evaluation/triage_summary.md): Human triage timing comparison summary
 - [x] [evaluation/parsing_gap_analysis.md](evaluation/parsing_gap_analysis.md): Parsing coverage and gap report
