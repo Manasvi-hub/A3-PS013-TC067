@@ -1,5 +1,7 @@
 # Demo script (5 minutes)
 
+**Recorded Demo Video:** [https://youtu.be/8hDyV-rBxMk](https://youtu.be/8hDyV-rBxMk)
+
 | Time | Action | What to say |
 |---|---|---|
 | 0:00 | Show the README problem statement | Small teams rebuild timelines by hand; logs are messy, clocks drift, evidence integrity is fragile. |
